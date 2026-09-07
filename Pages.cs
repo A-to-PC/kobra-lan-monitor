@@ -44,7 +44,7 @@ public static class Pages
             <p class="sub">One-time setup. Enter your printer's IP and choose a login for this dashboard.</p>
             <form method="post" action="/setup">
               <label>Printer IP address</label>
-              <input name="printerHost" placeholder="172.16.77.13" required>
+              <input name="printerHost" placeholder="192.168.1.50" required>
               <label>Choose a username</label>
               <input name="username" required>
               <label>Choose a password</label>
