@@ -36,15 +36,33 @@ Credentials are never hardcoded. Every session performs its own live handshake a
 
 ## Setup
 
+**1. Get the code onto a permanent location** — this isn't something to run from a Downloads or temp folder, since it'll keep running long-term and stores its settings next to itself.
+
+- With git: `git clone https://github.com/A-to-PC/kobra-lan-monitor.git C:\Apps\KobraLanMonitor`
+- Without git: on this page, click **Code → Download ZIP**, then extract it to a permanent folder, e.g. `C:\Apps\KobraLanMonitor`
+
+**2. Add ffmpeg.** Download a static Windows build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) (the "release essentials" zip is fine), and copy `ffmpeg.exe` out of its `bin` folder into the project folder from step 1 — the same folder that has `KobraLanMonitor.csproj` in it.
+
+**3. Build a runnable copy.** From that same folder:
+
 ```
 dotnet publish -c Release -o publish
+```
+
+This creates a `publish` subfolder — that's the actual app. You can ignore the source files after this; `publish` is what you'll run and leave in place.
+
+**4. Run it:**
+
+```
 cd publish
 dotnet KobraLanMonitor.dll --HttpPort=8090
 ```
 
-Then open `http://localhost:8090` (or `http://<your-pc-ip>:8090` from another device), and complete the one-time setup form: your printer's LAN IP address, and a username/password for the dashboard itself (this is separate from anything Anycubic-related — it's just to keep your own dashboard private on your network).
+Leave that window open (or run it via Task Scheduler / a Windows service if you want it to survive reboots — not covered here yet).
 
-Settings are stored in `data/settings.json` next to the published app (gitignored, never committed).
+**5. Open `http://localhost:8090`** (or `http://<your-pc-ip>:8090` from another device on the same network), and complete the one-time setup form: your printer's LAN IP address, and a username/password for the dashboard itself (this is separate from anything Anycubic-related — it's just to keep your own dashboard private on your network).
+
+Settings are stored in `data/settings.json` inside the `publish` folder (gitignored, never committed). If you ever rebuild with `dotnet publish` again into the same `publish` folder, that's safe and won't touch your settings — just don't delete the folder first.
 
 ## Known limitations
 
