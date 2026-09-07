@@ -1,0 +1,11 @@
+services:
+  kobra-lan-monitor:
+    build: .
+    container_name: kobra-lan-monitor
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      QueryIntervalSeconds: "2"
+    volumes:
+      - ./data:/app/data

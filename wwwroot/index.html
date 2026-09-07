@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kobra 3 Max Monitor</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --muted: #666666;
+    --border: #dddddd;
+    --accent: #2563eb;
+    --good: #16a34a;
+    --bad: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181d;
+      --card: #21242b;
+      --text: #f0f0f0;
+      --muted: #9aa0aa;
+      --border: #33363e;
+      --accent: #5b9bff;
+      --good: #4ade80;
+      --bad: #f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 0.9rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .layout { display: grid; grid-template-columns: 420px 1fr 420px; gap: 16px; align-items: stretch; }
+  .col-left, .col-mid, .col-right {
+    display: flex; flex-direction: column; height: calc(100vh - 180px); overflow: hidden;
+  }
+  .col-left .card, .col-right .card { flex-shrink: 0; }
+  .col-left .card:last-child, .col-right .card:last-child { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
+  .col-mid .card { flex: 1; display: flex; flex-direction: column; margin-bottom: 0; min-height: 0; }
+  .col-mid .camera-frame { flex: 1; aspect-ratio: unset; min-height: 0; }
+  .status-row { display: flex; align-items: center; gap: 8px; height: 28px; margin-bottom: 14px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .dot.connected { background: var(--good); }
+  .dot.error, .dot.disconnected { background: var(--bad); }
+  .state-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: white;
+    font-weight: 600;
+    text-transform: capitalize;
+    font-size: 0.9rem;
+  }
+  .filename { font-size: 0.9rem; color: var(--muted); margin-top: 4px; word-break: break-all; }
+  .progress-wrap { margin: 20px 0; }
+  .progress-bar-bg {
+    background: var(--border);
+    border-radius: 999px;
+    height: 14px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    background: var(--accent);
+    height: 100%;
+    width: 0%;
+    transition: width 0.5s ease;
+  }
+  .progress-label { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 16px; }
+  .stat { }
+  .stat .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .stat .value { font-size: 1.2rem; font-weight: 600; }
+  .error-box { color: var(--bad); font-size: 0.85rem; margin-top: 12px; }
+
+  .card h2 { font-size: 1rem; margin: 0 0 14px; }
+  .card-header-row { display: flex; align-items: center; justify-content: space-between; height: 28px; margin-bottom: 14px; }
+  .card-header-row h2 { margin: 0; }
+  .reconnect-btn {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    margin-bottom: 14px;
+  }
+  .reconnect-btn:hover { background: var(--accent); color: white; }
+
+  .file-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .file-tab {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .file-tab.active { color: white; background: var(--accent); border-color: var(--accent); }
+  .file-list-status { color: var(--muted); font-size: 0.85rem; }
+  .file-breadcrumb { font-size: 0.8rem; color: var(--accent); margin-bottom: 10px; cursor: pointer; }
+  .file-row.dir .file-name { color: var(--accent); cursor: pointer; }
+  .file-row.dir .file-name::before { content: '📁 '; }
+  .file-list { flex: 1; min-height: 0; overflow-y: auto; }
+  .file-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .file-row:last-child { border-bottom: none; }
+  .file-info { min-width: 0; }
+  .file-name { font-size: 0.85rem; word-break: break-all; }
+  .file-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .file-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .file-print-btn, .file-delete-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .file-print-btn { color: var(--good); border: 1px solid var(--good); }
+  .file-print-btn:hover { background: var(--good); color: white; }
+  .file-delete-btn { color: var(--bad); border: 1px solid var(--bad); }
+  .file-delete-btn:hover { background: var(--bad); color: white; }
+  .file-delete-btn:disabled { opacity: 0.5; cursor: default; }
+  .box-info { font-size: 0.8rem; color: var(--muted); margin-bottom: 14px; }
+  .spool-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .spool { text-align: center; }
+  .spool-active-marker { height: 10px; margin-bottom: 2px; }
+  .spool-active-marker::after {
+    content: '';
+    display: inline-block;
+    width: 3px; height: 10px;
+    background: var(--text);
+    border-radius: 2px;
+    visibility: hidden;
+  }
+  .spool.active .spool-active-marker::after { visibility: visible; }
+  .spool-icon {
+    width: 48px; height: 48px; margin: 0 auto 6px;
+    border-radius: 50%;
+    border: 6px solid var(--spool-color, #888);
+    background: var(--card);
+    box-sizing: border-box;
+  }
+  .spool.active .spool-icon { box-shadow: 0 0 0 2px var(--accent); }
+  .spool .type { font-size: 0.8rem; font-weight: 600; }
+  .spool .index { font-size: 0.7rem; color: var(--muted); }
+
+  .camera-frame {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .camera-frame img { width: 100%; height: 100%; object-fit: contain; }
+  .camera-frame .placeholder { color: var(--muted); font-size: 0.85rem; }
+
+  .header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .stop-btn {
+    flex-shrink: 0;
+    background: var(--bad);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+  }
+  .stop-btn:hover { filter: brightness(1.1); }
+  .stop-btn:disabled { opacity: 0.6; cursor: default; }
+  .stop-status { font-size: 0.8rem; margin-top: 6px; text-align: right; min-height: 1.1em; }
+  .stop-status.ok { color: var(--good); }
+  .stop-status.fail { color: var(--bad); }
+
+  .status-main-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .print-thumb { width: 64px; height: 64px; border-radius: 6px; object-fit: contain; background: #000; flex-shrink: 0; }
+
+  .control-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .control-label { width: 70px; flex-shrink: 0; font-size: 0.85rem; color: var(--muted); }
+  .control-value { width: 40px; font-size: 0.8rem; color: var(--muted); }
+  .control-row input[type="number"] {
+    width: 70px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text);
+  }
+  .control-row input[type="range"] { flex: 1; }
+  .toggle-btn, .apply-btn, .speed-btn {
+    background: transparent; color: var(--accent); border: 1px solid var(--accent);
+    border-radius: 6px; padding: 4px 10px; font-size: 0.78rem; cursor: pointer;
+  }
+  .toggle-btn.on { background: var(--accent); color: white; }
+  .toggle-btn:hover, .apply-btn:hover, .speed-btn:hover { background: var(--accent); color: white; }
+  .control-status { font-size: 0.8rem; color: var(--muted); min-height: 1.1em; }
+
+  .file-preview-btn {
+    flex-shrink: 0; background: transparent; color: var(--muted); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; font-size: 0.78rem; cursor: pointer;
+  }
+  .file-preview-btn:hover { background: var(--border); }
+  .file-thumb-preview { max-width: 160px; max-height: 160px; border-radius: 6px; margin-top: 8px; display: block; }
+
+  .upload-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .upload-row input[type="file"] { flex: 1; font-size: 0.8rem; color: var(--muted); }
+</style>
+</head>
+<body>
+  <div class="header-row">
+    <div>
+      <h1>Anycubic Kobra 3 Max</h1>
+      <p class="sub">Live status via local MQTT</p>
+    </div>
+    <div>
+      <button class="stop-btn" id="stopBtn" onclick="emergencyStop()">EMERGENCY STOP</button>
+      <div class="stop-status" id="stopStatus"></div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="col-left">
+      <div class="card">
+        <div class="status-row">
+          <div class="dot" id="connDot"></div>
+          <span id="connText">Connecting...</span>
+        </div>
+
+        <span class="state-badge" id="stateBadge">Unknown</span>
+        <div class="status-main-row">
+          <div class="filename" id="filename"></div>
+          <img class="print-thumb" id="printThumb" hidden>
+        </div>
+
+        <div class="progress-wrap">
+          <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+          <div class="progress-label">
+            <span id="layerText">Layer -- / --</span>
+            <span id="progressPct">--%</span>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat">
+            <div class="label">Remaining</div>
+            <div class="value" id="remainTime">--</div>
+          </div>
+          <div class="stat">
+            <div class="label">Est. completion</div>
+            <div class="value" id="estCompletion">--</div>
+          </div>
+          <div class="stat">
+            <div class="label">Last update</div>
+            <div class="value" id="lastUpdate">--</div>
+          </div>
+          <div class="stat">
+            <div class="label">Nozzle</div>
+            <div class="value" id="nozzleTemp">--</div>
+          </div>
+          <div class="stat">
+            <div class="label">Bed</div>
+            <div class="value" id="bedTemp">--</div>
+          </div>
+          <div class="stat">
+            <div class="label">Fan</div>
+            <div class="value" id="fanSpeed">--</div>
+          </div>
+          <div class="stat">
+            <div class="label">Light</div>
+            <div class="value" id="lightStatus">--</div>
+          </div>
+        </div>
+
+        <div class="error-box" id="errorBox"></div>
+      </div>
+
+      <div class="card" id="materialCard" hidden>
+        <div class="card-header-row">
+          <h2>Material (ACE)</h2>
+        </div>
+        <div class="box-info" id="boxInfo"></div>
+        <div class="spool-grid" id="spoolGrid"></div>
+        <div class="control-row" style="margin-top: 16px;">
+          <span class="control-label">Drying</span>
+          <button class="toggle-btn" id="dryingToggleBtn" onclick="toggleDrying()">--</button>
+          <span class="control-value" id="dryingStatusText"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-mid">
+      <div class="card">
+        <div class="card-header-row">
+          <h2>Camera</h2>
+          <button class="reconnect-btn" onclick="startCameraStream()">Reconnect</button>
+        </div>
+        <div class="camera-frame">
+          <img id="cameraImg" hidden>
+          <span class="placeholder" id="cameraPlaceholder">Connecting to camera...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-right">
+      <div class="card">
+        <div class="card-header-row">
+          <h2>Controls</h2>
+        </div>
+        <div class="control-row">
+          <span class="control-label">Light</span>
+          <button class="toggle-btn" id="lightToggleBtn" onclick="toggleLight()">--</button>
+          <input type="range" id="lightBrightness" min="1" max="100" value="100" oninput="document.getElementById('lightBrightnessVal').textContent = this.value + '%'">
+          <span class="control-value" id="lightBrightnessVal">100%</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">Nozzle °C</span>
+          <input type="number" id="nozzleSetInput" min="0" max="300" placeholder="target">
+          <button class="apply-btn" onclick="applyTemp('nozzle')">Set</button>
+        </div>
+        <div class="control-row">
+          <span class="control-label">Bed °C</span>
+          <input type="number" id="bedSetInput" min="0" max="120" placeholder="target">
+          <button class="apply-btn" onclick="applyTemp('bed')">Set</button>
+        </div>
+        <div class="control-row">
+          <span class="control-label">Fan</span>
+          <input type="range" id="fanSetSlider" min="0" max="100" value="100" oninput="document.getElementById('fanSetVal').textContent = this.value + '%'">
+          <span class="control-value" id="fanSetVal">100%</span>
+          <button class="apply-btn" onclick="applyFan()">Set</button>
+        </div>
+        <div class="control-row">
+          <span class="control-label">Speed</span>
+          <button class="speed-btn" onclick="applySpeed(1)">Silent</button>
+          <button class="speed-btn" onclick="applySpeed(2)">Standard</button>
+          <button class="speed-btn" onclick="applySpeed(3)">Sport</button>
+        </div>
+        <div class="control-status" id="controlStatus"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header-row">
+          <h2>Files</h2>
+          <button class="reconnect-btn" onclick="loadFiles()">Refresh</button>
+        </div>
+        <div class="upload-row">
+          <input type="file" id="uploadInput" accept=".gcode,.3mf,.gco,.gc">
+          <button class="apply-btn" onclick="uploadFile()">Upload</button>
+        </div>
+        <div class="control-status" id="uploadStatus"></div>
+        <div class="file-tabs">
+          <button class="file-tab active" id="tabLocal" onclick="switchFileTarget('local')">Local</button>
+          <button class="file-tab" id="tabUsb" onclick="switchFileTarget('usb')">USB</button>
+        </div>
+        <div class="file-breadcrumb" id="fileBreadcrumb" hidden></div>
+        <div id="fileListStatus" class="file-list-status">Loading...</div>
+        <div class="file-list" id="fileList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function formatDuration(seconds) {
+      if (seconds == null) return '--';
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      if (h > 0) return `${h}h ${m}m`;
+      return `${m}m`;
+    }
+
+    async function poll() {
+      try {
+        const res = await fetch('/api/status', { cache: 'no-store' });
+        const s = await res.json();
+
+        const dot = document.getElementById('connDot');
+        const connText = document.getElementById('connText');
+        dot.className = 'dot ' + s.connectionStatus;
+        connText.textContent = s.connectionStatus.charAt(0).toUpperCase() + s.connectionStatus.slice(1);
+
+        document.getElementById('stateBadge').textContent = s.state || 'Unknown';
+        document.getElementById('filename').textContent = s.filename || '';
+        updatePrintThumb(s.filename);
+
+        const pct = s.progress ?? 0;
+        document.getElementById('progressFill').style.width = pct + '%';
+        document.getElementById('progressPct').textContent = pct + '%';
+        document.getElementById('layerText').textContent =
+          `Layer ${s.currLayer ?? '--'} / ${s.totalLayers ?? '--'}`;
+
+        document.getElementById('remainTime').textContent = formatDuration(s.remainTimeSeconds);
+        document.getElementById('estCompletion').textContent =
+          s.remainTimeSeconds != null
+            ? new Date(Date.now() + s.remainTimeSeconds * 1000).toLocaleString('en-AU', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : '--';
+        document.getElementById('lastUpdate').textContent = s.lastUpdated
+          ? new Date(s.lastUpdated).toLocaleTimeString()
+          : '--';
+        document.getElementById('nozzleTemp').textContent =
+          s.nozzleTemp != null ? `${s.nozzleTemp}°/${s.nozzleTargetTemp ?? '--'}°` : '--';
+        document.getElementById('bedTemp').textContent =
+          s.bedTemp != null ? `${s.bedTemp}°/${s.bedTargetTemp ?? '--'}°` : '--';
+        document.getElementById('fanSpeed').textContent =
+          s.fanSpeedPct != null ? `${s.fanSpeedPct}%` : '--';
+        document.getElementById('lightStatus').textContent =
+          s.lightOn == null ? '--' : (s.lightOn ? `On (${s.lightBrightness ?? '?'}%)` : 'Off');
+
+        lastLightType = s.lightType ?? lastLightType;
+        const toggleBtn = document.getElementById('lightToggleBtn');
+        if (s.lightOn != null) {
+          toggleBtn.textContent = s.lightOn ? 'On' : 'Off';
+          toggleBtn.classList.toggle('on', s.lightOn);
+        }
+
+        document.getElementById('errorBox').textContent = s.error || '';
+
+        const materialCard = document.getElementById('materialCard');
+        if (s.filamentSlots && s.filamentSlots.length > 0) {
+          materialCard.hidden = false;
+          document.getElementById('boxInfo').textContent =
+            s.boxTemp != null ? `${s.boxTemp}°C` : '--';
+
+          const dryBtn = document.getElementById('dryingToggleBtn');
+          if (s.dryingOn != null) {
+            dryBtn.textContent = s.dryingOn ? 'On' : 'Off';
+            dryBtn.classList.toggle('on', s.dryingOn);
+          }
+          document.getElementById('dryingStatusText').textContent =
+            s.dryingOn && s.dryingTargetTemp != null ? `Target ${s.dryingTargetTemp}°C` : '';
+
+          const grid = document.getElementById('spoolGrid');
+          grid.innerHTML = '';
+          for (const slot of s.filamentSlots) {
+            const el = document.createElement('div');
+            el.className = 'spool' + (s.loadedSlot === slot.index ? ' active' : '');
+            el.innerHTML = `
+              <div class="spool-active-marker"></div>
+              <div class="spool-icon" style="--spool-color: ${slot.colorHex}"></div>
+              <div class="type">${slot.type || '--'}</div>
+              <div class="index">${slot.index + 1}</div>`;
+            grid.appendChild(el);
+          }
+        }
+      } catch (err) {
+        document.getElementById('connText').textContent = 'Page cannot reach backend';
+      }
+    }
+
+    function startCameraStream() {
+      const img = document.getElementById('cameraImg');
+      const placeholder = document.getElementById('cameraPlaceholder');
+
+      img.onload = () => {
+        img.hidden = false;
+        placeholder.hidden = true;
+      };
+      img.onerror = () => {
+        img.hidden = true;
+        placeholder.hidden = false;
+        placeholder.textContent = 'Camera disconnected, retrying...';
+        setTimeout(startCameraStream, 3000);
+      };
+
+      // A genuine live stream (multipart/x-mixed-replace) -- the browser keeps this single
+      // connection open and repaints the <img> as each new frame arrives, no polling needed.
+      img.src = `/api/stream.mjpg?t=${Date.now()}`;
+    }
+
+    async function emergencyStop() {
+      if (!confirm('Stop the current print immediately? This cannot be undone.')) return;
+
+      const btn = document.getElementById('stopBtn');
+      const status = document.getElementById('stopStatus');
+      btn.disabled = true;
+      status.className = 'stop-status';
+      status.textContent = 'Sending stop command...';
+
+      try {
+        const res = await fetch('/api/print/stop', { method: 'POST' });
+        if (res.ok) {
+          status.className = 'stop-status ok';
+          status.textContent = 'Stop command sent.';
+        } else {
+          status.className = 'stop-status fail';
+          status.textContent = 'Failed: no live connection to printer.';
+        }
+      } catch (err) {
+        status.className = 'stop-status fail';
+        status.textContent = 'Failed: could not reach server.';
+      } finally {
+        btn.disabled = false;
+        setTimeout(() => { status.textContent = ''; status.className = 'stop-status'; }, 8000);
+      }
+    }
+
+    let lastThumbFilename = null;
+    let lastLightType = null;
+    let lastLightOn = false;
+
+    async function updatePrintThumb(filename) {
+      const img = document.getElementById('printThumb');
+      if (!filename) {
+        img.hidden = true;
+        lastThumbFilename = null;
+        return;
+      }
+      if (filename === lastThumbFilename) return;
+      lastThumbFilename = filename;
+
+      try {
+        const res = await fetch(`/api/files/thumbnail?target=local&fileName=${encodeURIComponent(filename)}`, { cache: 'no-store' });
+        if (!res.ok) { img.hidden = true; return; }
+        const data = await res.json();
+        img.src = `data:image/png;base64,${data.thumbnailBase64}`;
+        img.hidden = false;
+      } catch (err) {
+        img.hidden = true;
+      }
+    }
+
+    async function toggleLight() {
+      lastLightOn = !document.getElementById('lightToggleBtn').classList.contains('on');
+      const brightness = parseInt(document.getElementById('lightBrightness').value, 10);
+      await sendControl('/api/light', { on: lastLightOn, brightness, lightType: lastLightType }, 'controlStatus');
+    }
+
+    async function toggleDrying() {
+      const on = !document.getElementById('dryingToggleBtn').classList.contains('on');
+      await sendControl('/api/drying', { on, targetTemp: 50, durationMinutes: 480 }, 'controlStatus');
+    }
+
+    async function applyTemp(which) {
+      const input = document.getElementById(which === 'nozzle' ? 'nozzleSetInput' : 'bedSetInput');
+      const value = parseInt(input.value, 10);
+      if (isNaN(value)) { alert('Enter a target temperature first.'); return; }
+      const body = which === 'nozzle' ? { targetNozzleTemp: value } : { targetHotbedTemp: value };
+      await sendControl('/api/print/settings', body, 'controlStatus');
+    }
+
+    async function applyFan() {
+      const value = parseInt(document.getElementById('fanSetSlider').value, 10);
+      await sendControl('/api/print/settings', { fanSpeedPct: value }, 'controlStatus');
+    }
+
+    async function applySpeed(mode) {
+      await sendControl('/api/print/settings', { printSpeedMode: mode }, 'controlStatus');
+    }
+
+    async function sendControl(url, body, statusElId) {
+      const statusEl = document.getElementById(statusElId);
+      statusEl.textContent = 'Sending...';
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          statusEl.textContent = 'Sent.';
+        } else {
+          const errBody = await res.json().catch(() => null);
+          statusEl.textContent = errBody?.error || 'Failed: no live connection to printer.';
+        }
+      } catch (err) {
+        statusEl.textContent = 'Could not reach server.';
+      } finally {
+        setTimeout(() => { statusEl.textContent = ''; }, 5000);
+      }
+    }
+
+    async function previewFile(f, row) {
+      let existing = row.querySelector('.file-thumb-preview');
+      if (existing) { existing.remove(); return; }
+
+      try {
+        const res = await fetch(`/api/files/thumbnail?target=${currentFileTarget}&fileName=${encodeURIComponent(f.fileName)}`, { cache: 'no-store' });
+        if (!res.ok) { alert('No preview available for this file.'); return; }
+        const data = await res.json();
+        const img = document.createElement('img');
+        img.className = 'file-thumb-preview';
+        img.src = `data:image/png;base64,${data.thumbnailBase64}`;
+        row.appendChild(img);
+      } catch (err) {
+        alert('Could not reach server.');
+      }
+    }
+
+    async function uploadFile() {
+      const input = document.getElementById('uploadInput');
+      const statusEl = document.getElementById('uploadStatus');
+      if (!input.files.length) { alert('Choose a file first.'); return; }
+
+      const formData = new FormData();
+      formData.append('file', input.files[0]);
+      statusEl.textContent = 'Uploading...';
+
+      try {
+        const res = await fetch('/api/files/upload', { method: 'POST', body: formData });
+        if (res.ok) {
+          statusEl.textContent = 'Uploaded. Refreshing file list...';
+          loadFiles();
+        } else {
+          const body = await res.json().catch(() => null);
+          statusEl.textContent = body?.error || `Upload failed (${res.status}).`;
+        }
+      } catch (err) {
+        statusEl.textContent = 'Could not reach server.';
+      } finally {
+        setTimeout(() => { statusEl.textContent = ''; }, 8000);
+      }
+    }
+
+    let currentFileTarget = 'local';
+    let currentPath = '/';
+
+    function switchFileTarget(target) {
+      currentFileTarget = target;
+      currentPath = '/';
+      document.getElementById('tabLocal').classList.toggle('active', target === 'local');
+      document.getElementById('tabUsb').classList.toggle('active', target === 'usb');
+      loadFiles();
+    }
+
+    function joinPath(base, name) {
+      return base === '/' ? name : `${base}/${name}`;
+    }
+
+    function openFolder(f) {
+      currentPath = joinPath(currentPath, f.fileName);
+      loadFiles();
+    }
+
+    function renderBreadcrumb() {
+      const el = document.getElementById('fileBreadcrumb');
+      if (currentPath === '/') {
+        el.hidden = true;
+        return;
+      }
+      el.hidden = false;
+      const segments = currentPath.split('/').filter(Boolean);
+      const rootLabel = currentFileTarget === 'usb' ? 'USB' : 'Local';
+      const parts = [rootLabel, ...segments];
+      el.innerHTML = parts.map((p, i) => `<span data-i="${i}">${p}</span>`).join(' / ');
+      el.querySelectorAll('span').forEach(span => {
+        span.onclick = () => {
+          const i = parseInt(span.dataset.i, 10);
+          currentPath = i === 0 ? '/' : '/' + segments.slice(0, i).join('/');
+          loadFiles();
+        };
+      });
+    }
+
+    function formatBytes(bytes) {
+      if (bytes == null) return '';
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    async function loadFiles() {
+      const statusEl = document.getElementById('fileListStatus');
+      const listEl = document.getElementById('fileList');
+      statusEl.textContent = 'Loading...';
+      statusEl.hidden = false;
+      listEl.innerHTML = '';
+      renderBreadcrumb();
+
+      try {
+        const res = await fetch(`/api/files?target=${currentFileTarget}&path=${encodeURIComponent(currentPath)}`, { cache: 'no-store' });
+        if (!res.ok) {
+          statusEl.textContent = res.status === 503
+            ? 'No live connection to printer.'
+            : 'Failed to load files.';
+          return;
+        }
+
+        const files = await res.json();
+        if (!files.length) {
+          statusEl.textContent = currentFileTarget === 'usb' ? 'No USB drive or no files found.' : 'No files found.';
+          return;
+        }
+
+        statusEl.hidden = true;
+        for (const f of files) {
+          const row = document.createElement('div');
+          row.className = 'file-row' + (f.isDirectory ? ' dir' : '');
+          const meta = f.isDirectory ? '' : [formatBytes(f.sizeBytes), f.modifiedAt ? new Date(f.modifiedAt).toLocaleString('en-AU') : null]
+            .filter(Boolean).join(' · ');
+          row.innerHTML = `
+            <div class="file-info">
+              <div class="file-name">${f.fileName}</div>
+              <div class="file-meta">${meta}</div>
+            </div>
+            <div class="file-actions">
+              ${f.isDirectory ? '' : '<button class="file-preview-btn">Preview</button><button class="file-print-btn">Print</button><button class="file-delete-btn">Delete</button>'}
+            </div>`;
+          if (f.isDirectory) {
+            row.querySelector('.file-name').onclick = () => openFolder(f);
+          } else {
+            row.querySelector('.file-preview-btn').onclick = () => previewFile(f, row);
+            row.querySelector('.file-print-btn').onclick = () => startPrint(f);
+            row.querySelector('.file-delete-btn').onclick = () => deleteFile(f);
+          }
+          listEl.appendChild(row);
+        }
+      } catch (err) {
+        statusEl.textContent = 'Could not reach server.';
+      }
+    }
+
+    async function startPrint(f) {
+      if (!confirm(`Start printing "${f.fileName}" now?`)) return;
+
+      try {
+        const res = await fetch('/api/print/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: f.fileName, path: currentPath }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          alert(body?.error || 'Failed to start print.');
+        }
+      } catch (err) {
+        alert('Could not reach server.');
+      }
+    }
+
+    async function deleteFile(f) {
+      if (!confirm(`Delete "${f.fileName}" from the printer? This cannot be undone.`)) return;
+
+      try {
+        const res = await fetch('/api/files/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: currentFileTarget, path: currentPath, fileName: f.fileName }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          alert(body?.error || 'Delete failed.');
+          return;
+        }
+        loadFiles();
+      } catch (err) {
+        alert('Could not reach server.');
+      }
+    }
+
+    poll();
+    setInterval(poll, 2000);
+    startCameraStream();
+    loadFiles();
+  </script>
+</body>
+</html>
