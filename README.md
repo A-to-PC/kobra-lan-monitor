@@ -31,7 +31,10 @@ Credentials are never hardcoded. Every session performs its own live handshake a
 - .NET 10 SDK
 - `ffmpeg.exe` (Windows build) placed in the project root — not bundled in this repo (keeps the repo small; this is a third-party binary). Grab a static Windows build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) and drop `ffmpeg.exe` next to `KobraLanMonitor.csproj`.
 - Your printer must be on the same LAN, with LAN mode reachable (this is the same connection Slicer Next itself uses).
-- A camera — a generic USB webcam works fine on stock firmware, no hacking required, despite what Anycubic's documentation implies about needing their own module. Confirmed working cleanly: Microsoft LifeCam HD-3000. Confirmed detected and streaming but with a visual "doubled frame" artifact: Razer Kiyo — reproduced identically in Anycubic's own Slicer Next, so it's the printer's own onboard video pipeline (likely tuned for whatever resolution/format Anycubic's own camera outputs), not something this app or its client can fix. Basic/lower-resolution webcams are the safer bet.
+- A camera — a generic USB webcam works fine on stock firmware, no hacking required, despite what Anycubic's documentation implies about needing their own module.
+  - Confirmed working cleanly: **Microsoft LifeCam HD-3000** (720p).
+  - Confirmed detected and streaming, but with a "doubled frame" artifact (part of the image is a stale previous frame): **Razer Kiyo** (defaults to 1080p). Reproduced identically in Anycubic's own Slicer Next, so it's the printer's own onboard video pipeline, not something this app or its client can fix.
+  - Working theory (two data points, not proven): Anycubic's own official camera accessory is 720p, matching the HD-3000 that works cleanly — the printer's video pipeline may simply be tuned for that resolution and mishandle higher ones like the Kiyo's default 1080p. **A 720p USB webcam is the safer bet** until this gets more data points.
 
 ## Setup
 
