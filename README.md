@@ -8,7 +8,7 @@ Live status, camera streaming, print control, ACE (multi-material) filament and 
 
 **Live-verified against a real printer:**
 - Live status: state, progress, layer, ETA, nozzle/bed temps, fan, filament slots
-- Genuine continuous camera stream (MJPEG, low latency — no polling)
+- Genuine continuous camera stream (MJPEG, low latency — no polling), with its own Start/Stop control — fully independent of Slicer Next (it needed the same "start video encoder" command Slicer Next's own camera button sends; earlier versions of this app didn't send it and could look like they depended on Slicer Next being open — fixed)
 - Pause / Resume / Emergency Stop
 - File browser (local storage + USB): list, folder navigation, delete
 - ACE box: filament colours/types, active-slot indicator, drying on/off
@@ -19,6 +19,8 @@ Live status, camera streaming, print control, ACE (multi-material) filament and 
 - Nozzle/bed temperature, fan speed, and print-speed-mode adjustment mid-print
 - File preview thumbnails
 - Upload a file from your PC straight to the printer (`/gcode_upload`) and print it
+
+If a date shows up blank next to a file, that's deliberate — the printer sometimes reports a bogus tiny counter instead of a real timestamp for files tied to a print task, and the UI hides it rather than show something wrong.
 
 If you try any of the second group and it doesn't work exactly as expected, please open an issue with what you saw — that's exactly the kind of feedback this needs before those get promoted to "confirmed."
 
