@@ -31,6 +31,7 @@ Credentials are never hardcoded. Every session performs its own live handshake a
 - .NET 10 SDK
 - `ffmpeg.exe` (Windows build) placed in the project root — not bundled in this repo (keeps the repo small; this is a third-party binary). Grab a static Windows build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) and drop `ffmpeg.exe` next to `KobraLanMonitor.csproj`.
 - Your printer must be on the same LAN, with LAN mode reachable (this is the same connection Slicer Next itself uses).
+- A camera — a generic USB webcam works fine on stock firmware (confirmed with a Microsoft LifeCam HD-3000, no hacking required), you don't need Anycubic's own camera module despite what their documentation implies.
 
 ## Setup
 
