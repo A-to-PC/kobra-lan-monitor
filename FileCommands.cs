@@ -95,7 +95,13 @@ public static class FileListParser
     {
         if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty(name, out var v)) return null;
         if (v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out var unix))
-            return unix > 9_999_999_999 ? DateTimeOffset.FromUnixTimeMilliseconds(unix) : DateTimeOffset.FromUnixTimeSeconds(unix);
+        {
+            var parsed = unix > 9_999_999_999 ? DateTimeOffset.FromUnixTimeMilliseconds(unix) : DateTimeOffset.FromUnixTimeSeconds(unix);
+            // The printer sometimes writes a small counter instead of a real timestamp for files
+            // tied to a completed/attempted print task (seen as low as 89263, i.e. ~1970) -- anything
+            // before this project existed is obviously not a real file date, so don't show it.
+            return parsed.Year < 2025 ? null : parsed;
+        }
         if (v.ValueKind == JsonValueKind.String && DateTimeOffset.TryParse(v.GetString(), out var dt))
             return dt;
         return null;
