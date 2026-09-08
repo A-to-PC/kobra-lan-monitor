@@ -21,6 +21,7 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
     private volatile string? _webFileCommandTopic;
     private volatile string? _lightCommandTopic;
     private volatile string? _multiColorBoxCommandTopic;
+    private volatile string? _videoCommandTopic;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonElement>> _pendingFileRequests = new();
 
     /// <summary>
@@ -132,6 +133,41 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
             .Build();
 
         logger.LogInformation("Setting light type {LightType}: on={On} brightness={Brightness}", lightType, on, brightness);
+        await client.PublishAsync(message, ct);
+        return true;
+    }
+
+    /// <summary>
+    /// Tells the printer to start/stop its video encoder. Captured live from Slicer Next's own camera
+    /// Play/Stop button -- the printer's :18088/flv stream serves no frames at all until this is sent,
+    /// which is why our own camera stream previously appeared to depend on Slicer Next being open.
+    /// Topic: .../web/printer/{model}/{device}/video, action "startCapture"/"stopCapture".
+    /// </summary>
+    public async Task<bool> SendVideoCaptureControlAsync(bool start, CancellationToken ct)
+    {
+        var client = _currentClient;
+        var topic = _videoCommandTopic;
+        if (client is not { IsConnected: true } || topic == null)
+        {
+            logger.LogWarning("Cannot control video capture -- no live MQTT connection");
+            return false;
+        }
+
+        var payload = new
+        {
+            type = "video",
+            action = start ? "startCapture" : "stopCapture",
+            timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            msgid = Guid.NewGuid().ToString(),
+            data = (object?)null,
+        };
+
+        var message = new MqttApplicationMessageBuilder()
+            .WithTopic(topic)
+            .WithPayload(JsonSerializer.Serialize(payload))
+            .Build();
+
+        logger.LogInformation("Video capture: {Action}", start ? "startCapture" : "stopCapture");
         await client.PublishAsync(message, ct);
         return true;
     }
@@ -310,6 +346,7 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
                 _webFileCommandTopic = null;
                 _lightCommandTopic = null;
                 _multiColorBoxCommandTopic = null;
+                _videoCommandTopic = null;
                 foreach (var key in _pendingFileRequests.Keys.ToArray())
                 {
                     if (_pendingFileRequests.TryRemove(key, out var pending))
@@ -419,6 +456,7 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
         _webFileCommandTopic = $"{queryTopicBase}/file";
         _lightCommandTopic = $"{queryTopicBase}/light";
         _multiColorBoxCommandTopic = $"{queryTopicBase}/multiColorBox";
+        _videoCommandTopic = $"{queryTopicBase}/video";
 
         while (!ct.IsCancellationRequested && client.IsConnected)
         {

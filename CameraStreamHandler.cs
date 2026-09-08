@@ -13,7 +13,7 @@ public static class CameraStreamHandler
 {
     private const string Boundary = "kobraframe";
 
-    public static async Task StreamAsync(HttpContext ctx, AppSettings appSettings, IConfiguration config, ILogger logger)
+    public static async Task StreamAsync(HttpContext ctx, AppSettings appSettings, IConfiguration config, MqttMonitorService mqtt, ILogger logger)
     {
         if (string.IsNullOrEmpty(appSettings.PrinterHost))
         {
@@ -24,6 +24,12 @@ public static class CameraStreamHandler
         var ffmpegPath = config["FfmpegPath"] ?? Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe");
         var streamUrl = $"http://{appSettings.PrinterHost}:18088/flv";
         var ct = ctx.RequestAborted;
+
+        // The printer's :18088/flv endpoint serves no frames at all until told to start its video
+        // encoder -- captured live from Slicer Next's own camera Play button. Safe to send even if
+        // another viewer already has it running (idempotent on the printer's side).
+        await mqtt.SendVideoCaptureControlAsync(true, ct);
+        await Task.Delay(400, ct);
 
         var psi = new ProcessStartInfo
         {

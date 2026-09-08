@@ -101,6 +101,9 @@
     margin-bottom: 14px;
   }
   .reconnect-btn:hover { background: var(--accent); color: white; }
+  .camera-btns { display: flex; gap: 8px; }
+  .reconnect-btn.stop { color: var(--bad); border-color: var(--bad); }
+  .reconnect-btn.stop:hover { background: var(--bad); color: white; }
 
   .file-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
   .file-tab {
@@ -316,11 +319,14 @@
       <div class="card">
         <div class="card-header-row">
           <h2>Camera</h2>
-          <button class="reconnect-btn" onclick="startCameraStream()">Reconnect</button>
+          <div class="camera-btns">
+            <button class="reconnect-btn" id="camStartBtn" onclick="startCameraStream()">Start</button>
+            <button class="reconnect-btn stop" id="camStopBtn" onclick="stopCameraStream()" hidden>Stop</button>
+          </div>
         </div>
         <div class="camera-frame">
           <img id="cameraImg" hidden>
-          <span class="placeholder" id="cameraPlaceholder">Connecting to camera...</span>
+          <span class="placeholder" id="cameraPlaceholder">Camera stopped.</span>
         </div>
       </div>
     </div>
@@ -469,9 +475,15 @@
       }
     }
 
+    let cameraStopped = false;
+
     function startCameraStream() {
+      cameraStopped = false;
       const img = document.getElementById('cameraImg');
       const placeholder = document.getElementById('cameraPlaceholder');
+      document.getElementById('camStartBtn').hidden = true;
+      document.getElementById('camStopBtn').hidden = false;
+      placeholder.textContent = 'Connecting to camera...';
 
       img.onload = () => {
         img.hidden = false;
@@ -479,6 +491,7 @@
       };
       img.onerror = () => {
         img.hidden = true;
+        if (cameraStopped) return; // user hit Stop -- this abort is expected, don't retry
         placeholder.hidden = false;
         placeholder.textContent = 'Camera disconnected, retrying...';
         setTimeout(startCameraStream, 3000);
@@ -487,6 +500,26 @@
       // A genuine live stream (multipart/x-mixed-replace) -- the browser keeps this single
       // connection open and repaints the <img> as each new frame arrives, no polling needed.
       img.src = `/api/stream.mjpg?t=${Date.now()}`;
+    }
+
+    function stopCameraStream() {
+      cameraStopped = true;
+      const img = document.getElementById('cameraImg');
+      // Clearing src aborts the in-flight fetch, which the server sees via RequestAborted and
+      // cleanly kills ffmpeg + closes the connection to the printer -- a proper teardown, not
+      // just abandoning the tab, so it shouldn't leave the printer's stream server in a bad state.
+      img.src = '';
+      img.hidden = true;
+      document.getElementById('cameraPlaceholder').hidden = false;
+      document.getElementById('cameraPlaceholder').textContent = 'Camera stopped.';
+      document.getElementById('camStartBtn').hidden = false;
+      document.getElementById('camStopBtn').hidden = true;
+
+      // Explicitly tells the printer to stop its video encoder. This is only sent on a deliberate
+      // Stop click (not on tab-close or a dropped connection) since it's a shared toggle on the
+      // printer's side -- an accidental disconnect shouldn't kill another viewer's (e.g. Slicer
+      // Next's) feed too.
+      fetch('/api/camera/stop', { method: 'POST' }).catch(() => {});
     }
 
     async function emergencyStop() {

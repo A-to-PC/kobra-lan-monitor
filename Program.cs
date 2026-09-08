@@ -114,8 +114,16 @@ app.MapPost("/logout", async (HttpContext ctx) =>
 
 app.MapGet("/api/status", (PrinterState state) => Results.Json(state.Snapshot()));
 
-app.MapGet("/api/stream.mjpg", (HttpContext ctx, ILoggerFactory lf) =>
-    CameraStreamHandler.StreamAsync(ctx, appSettings, builder.Configuration, lf.CreateLogger("CameraStream")));
+app.MapGet("/api/stream.mjpg", (HttpContext ctx, MqttMonitorService mqtt, ILoggerFactory lf) =>
+    CameraStreamHandler.StreamAsync(ctx, appSettings, builder.Configuration, mqtt, lf.CreateLogger("CameraStream")));
+
+app.MapPost("/api/camera/stop", async (MqttMonitorService mqtt, CancellationToken ct) =>
+{
+    var sent = await mqtt.SendVideoCaptureControlAsync(false, ct);
+    return sent
+        ? Results.Ok(new { ok = true })
+        : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+});
 
 app.MapPost("/api/print/stop", async (MqttMonitorService mqtt, CancellationToken ct) =>
 {
