@@ -227,7 +227,21 @@
     border-radius: 6px; padding: 4px 10px; font-size: 0.78rem; cursor: pointer;
   }
   .file-preview-btn:hover { background: var(--border); }
-  .file-thumb-preview { max-width: 160px; max-height: 160px; border-radius: 6px; margin-top: 8px; display: block; }
+
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; padding: 40px; box-sizing: border-box;
+  }
+  .modal-content { position: relative; max-width: 90vw; max-height: 90vh; }
+  .modal-content img { max-width: 90vw; max-height: 90vh; display: block; border-radius: 8px; }
+  .modal-close {
+    position: absolute; top: -14px; right: -14px;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    font-size: 1.2rem; line-height: 1; cursor: pointer;
+  }
+  .modal-close:hover { background: var(--bad); color: white; border-color: var(--bad); }
 
   .upload-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
   .upload-row input[type="file"] { flex: 1; font-size: 0.8rem; color: var(--muted); }
@@ -385,6 +399,13 @@
         <div id="fileListStatus" class="file-list-status">Loading...</div>
         <div class="file-list" id="fileList"></div>
       </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="previewModal" hidden onclick="closePreviewModal(event)">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closePreviewModal(event)">&times;</button>
+      <img id="previewModalImg">
     </div>
   </div>
 
@@ -624,20 +645,22 @@
       }
     }
 
-    async function previewFile(f, row) {
-      let existing = row.querySelector('.file-thumb-preview');
-      if (existing) { existing.remove(); return; }
-
+    async function previewFile(f) {
       try {
         const res = await fetch(`/api/files/thumbnail?target=${currentFileTarget}&fileName=${encodeURIComponent(f.fileName)}`, { cache: 'no-store' });
         if (!res.ok) { alert('No preview available for this file.'); return; }
         const data = await res.json();
-        const img = document.createElement('img');
-        img.className = 'file-thumb-preview';
-        img.src = `data:image/png;base64,${data.thumbnailBase64}`;
-        row.appendChild(img);
+        document.getElementById('previewModalImg').src = `data:image/png;base64,${data.thumbnailBase64}`;
+        document.getElementById('previewModal').hidden = false;
       } catch (err) {
         alert('Could not reach server.');
+      }
+    }
+
+    function closePreviewModal(e) {
+      // Only close on a click on the backdrop itself or the close button, not the image.
+      if (e.target.id === 'previewModal' || e.target.className === 'modal-close') {
+        document.getElementById('previewModal').hidden = true;
       }
     }
 
@@ -753,7 +776,7 @@
           if (f.isDirectory) {
             row.querySelector('.file-name').onclick = () => openFolder(f);
           } else {
-            row.querySelector('.file-preview-btn').onclick = () => previewFile(f, row);
+            row.querySelector('.file-preview-btn').onclick = () => previewFile(f);
             row.querySelector('.file-print-btn').onclick = () => startPrint(f);
             row.querySelector('.file-delete-btn').onclick = () => deleteFile(f);
           }
