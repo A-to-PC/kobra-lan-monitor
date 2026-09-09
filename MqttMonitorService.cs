@@ -424,6 +424,7 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
         };
 
         var options = new MqttClientOptionsBuilder()
+            .WithClientId($"KobraLanMonitor-{Guid.NewGuid():N}")
             .WithTcpServer(brokerUri.Host, brokerUri.Port)
             .WithCredentials(creds.Username, creds.Password)
             .WithProtocolVersion(MqttProtocolVersion.V311)
