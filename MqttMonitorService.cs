@@ -24,6 +24,13 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
     private volatile string? _videoCommandTopic;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonElement>> _pendingFileRequests = new();
 
+    // Tracks real traffic from the printer, independent of MQTTnet's own IsConnected flag -- a TCP
+    // connection can go half-dead (printer stops responding, socket never notices) while IsConnected
+    // stays true for hours, since without keepalive there's nothing actively probing it. If no message
+    // arrives for too long, that's treated as a dead connection and forces a reconnect.
+    private volatile int _lastMessageTicks = Environment.TickCount;
+    private static readonly TimeSpan StaleConnectionTimeout = TimeSpan.FromSeconds(30);
+
     /// <summary>
     /// Sends a print-control command. Pause/resume are confirmed via live capture of Slicer Next's own
     /// MQTT traffic; "stop" is confirmed against the documented Kobra 3 MQTT command reference
@@ -389,6 +396,8 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
 
         client.ApplicationMessageReceivedAsync += e =>
         {
+            _lastMessageTicks = Environment.TickCount;
+
             var topic = e.ApplicationMessage.Topic;
             var payloadText = e.ApplicationMessage.ConvertPayloadToString();
 
@@ -428,6 +437,7 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
             .WithTcpServer(brokerUri.Host, brokerUri.Port)
             .WithCredentials(creds.Username, creds.Password)
             .WithProtocolVersion(MqttProtocolVersion.V311)
+            .WithKeepAlivePeriod(TimeSpan.FromSeconds(15))
             .WithTlsOptions(o =>
             {
                 o.UseTls();
@@ -458,9 +468,18 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
         _lightCommandTopic = $"{queryTopicBase}/light";
         _multiColorBoxCommandTopic = $"{queryTopicBase}/multiColorBox";
         _videoCommandTopic = $"{queryTopicBase}/video";
+        _lastMessageTicks = Environment.TickCount;
 
         while (!ct.IsCancellationRequested && client.IsConnected)
         {
+            if (IsConnectionStale())
+            {
+                logger.LogWarning(
+                    "No MQTT traffic received in over {Seconds}s despite IsConnected still reporting true -- " +
+                    "treating the connection as dead and forcing a reconnect", StaleConnectionTimeout.TotalSeconds);
+                break;
+            }
+
             foreach (var queryType in QueryTypes)
             {
                 await PublishQueryAsync(client, queryTopicBase, queryType, ct);
@@ -478,6 +497,14 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
 
         state.ConnectionStatus = "disconnected";
     }
+
+    /// <summary>
+    /// True once too long has passed since any MQTT message was actually received, regardless of what
+    /// MQTTnet's own IsConnected flag reports. Uses Environment.TickCount so this stays correct across
+    /// its ~25-day wraparound (plain subtraction is the standard-safe idiom for that).
+    /// </summary>
+    private bool IsConnectionStale() =>
+        unchecked(Environment.TickCount - _lastMessageTicks) > StaleConnectionTimeout.TotalMilliseconds;
 
     private async Task PublishQueryAsync(IMqttClient client, string queryTopicBase, string queryType, CancellationToken ct)
     {
