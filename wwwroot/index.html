@@ -354,9 +354,6 @@
         <div class="control-row">
           <span class="control-label">Light</span>
           <button class="toggle-btn" id="lightToggleBtn" onclick="toggleLight()">--</button>
-          <input type="range" id="lightBrightness" min="1" max="100" value="100" oninput="document.getElementById('lightBrightnessVal').textContent = this.value + '%'">
-          <span class="control-value" id="lightBrightnessVal">100%</span>
-          <button class="apply-btn" onclick="applyLightBrightness()">Set</button>
         </div>
         <div class="control-row">
           <span class="control-label">Nozzle °C</span>
@@ -599,15 +596,9 @@
 
     async function toggleLight() {
       lastLightOn = !document.getElementById('lightToggleBtn').classList.contains('on');
-      const brightness = parseInt(document.getElementById('lightBrightness').value, 10);
-      await sendControl('/api/light', { on: lastLightOn, brightness, lightType: lastLightType }, 'controlStatus');
-    }
-
-    async function applyLightBrightness() {
-      // Only the slider changed -- keep the light's current on/off state as-is, just update brightness.
-      const on = document.getElementById('lightToggleBtn').classList.contains('on');
-      const brightness = parseInt(document.getElementById('lightBrightness').value, 10);
-      await sendControl('/api/light', { on, brightness, lightType: lastLightType }, 'controlStatus');
+      // No brightness control -- confirmed not dimmable (Slicer Next's own UI only has on/off too),
+      // so always send full brightness; the printer just uses it as a simple on/off switch.
+      await sendControl('/api/light', { on: lastLightOn, brightness: 100, lightType: lastLightType }, 'controlStatus');
     }
 
     async function toggleDrying() {
