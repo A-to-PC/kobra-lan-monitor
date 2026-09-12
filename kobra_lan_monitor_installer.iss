@@ -1,6 +1,6 @@
 #define AppName "Kobra LAN Monitor"
 #define ShortName "Kobra LAN Monitor"
-#define AppVersion "1.0.1"
+#define AppVersion "1.0.2"
 #define AppPublisher "A to PC"
 ; No dedicated atopc.com.au page for this one -- the GitHub repo is the only confirmed
 ; real URL, so that's what AppPublisherURL points at rather than guessing a domain.

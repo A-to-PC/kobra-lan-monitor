@@ -126,7 +126,10 @@
   .file-breadcrumb { font-size: 0.8rem; color: var(--accent); margin-bottom: 10px; cursor: pointer; }
   .file-row.dir .file-name { color: var(--accent); cursor: pointer; }
   .file-row.dir .file-name::before { content: '📁 '; }
-  .file-list { flex: 1; min-height: 0; overflow-y: auto; }
+  /* max-height is a firm, independent cap -- without it, an ever-growing file list feeds
+     back into the layout's column-stretch calculation (see .layout below) and grows the
+     entire page taller with every file added, instead of scrolling in place. */
+  .file-list { flex: 1; min-height: 0; max-height: 190px; overflow-y: auto; }
   .file-row {
     display: flex;
     align-items: center;

@@ -4,6 +4,8 @@ A self-hosted web dashboard for the Anycubic Kobra 3 (and likely other Kobra 3-g
 
 Live status, camera streaming, print control, ACE (multi-material) filament and drying control, and remote file/print management, all from a browser on any device on your LAN.
 
+![Kobra LAN Monitor dashboard, live mid-print](docs/dashboard-screenshot.png)
+
 ## Features
 
 **Every feature is now live-verified against a real printer — nothing left untested:**
@@ -20,7 +22,7 @@ If a date shows up blank next to a file, that's deliberate — the printer somet
 
 Grab the installer from the [latest release](https://github.com/A-to-PC/kobra-lan-monitor/releases/latest) — a self-contained one-click `.exe`, bundled ffmpeg included, no .NET SDK required. It adds a Windows Firewall exception automatically (needs one UAC prompt for that) and creates three Start Menu/Desktop shortcuts: **Start**, **Stop**, and **Open** (reopens the dashboard in your browser without restarting anything). First run walks you through the one-time setup form described in step 5 below.
 
-Prefer to build from source instead (or need it on another OS)? See **Setup** below.
+Prefer to build from source instead (or need it on another OS)? See **Setup (build from source)** below.
 
 ## Why this exists
 
@@ -29,6 +31,8 @@ Anycubic's own apps (Slicer Next, the Anycubic Cloud app) require a cloud accoun
 Credentials are never hardcoded. Every session performs its own live handshake against your printer's IP to obtain fresh, printer-specific credentials. Nothing here embeds Anycubic's shared fleet secrets.
 
 ## Requirements
+
+Using the installer above? Only the last two items apply — it bundles its own runtime and ffmpeg. Building from source needs all four:
 
 - .NET 10 SDK
 - `ffmpeg.exe` (Windows build) placed in the project root — not bundled in this repo (keeps the repo small; this is a third-party binary). Grab a static Windows build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) and drop `ffmpeg.exe` next to `KobraLanMonitor.csproj`.
@@ -40,7 +44,7 @@ Credentials are never hardcoded. Every session performs its own live handshake a
 
 ## Setup (build from source)
 
-**1. Get the code onto a permanent location** — this isn't something to run from a Downloads or temp folder, since it'll keep running long-term and stores its settings next to itself.
+**1. Get the code onto a permanent location** — this isn't something to run from a Downloads or temp folder, since it's meant to keep running long-term in the background.
 
 - With git: `git clone https://github.com/A-to-PC/kobra-lan-monitor.git C:\Apps\KobraLanMonitor`
 - Without git: on this page, click **Code → Download ZIP**, then extract it to a permanent folder, e.g. `C:\Apps\KobraLanMonitor`
@@ -59,14 +63,14 @@ This creates a `publish` subfolder — that's the actual app. You can ignore the
 
 ```
 cd publish
-dotnet KobraLanMonitor.dll --HttpPort=8899
+dotnet KobraLanMonitor.dll
 ```
 
-Leave that window open (or run it via Task Scheduler / a Windows service if you want it to survive reboots — not covered here yet).
+Leave that window open (or run it via Task Scheduler / a Windows service if you want it to survive reboots — not covered here yet). Add `--HttpPort=XXXX` if you want something other than the default `8899`.
 
 **5. Open `http://localhost:8899`** (or `http://<your-pc-ip>:8899` from another device on the same network), and complete the one-time setup form: your printer's LAN IP address, and a username/password for the dashboard itself (this is separate from anything Anycubic-related — it's just to keep your own dashboard private on your network).
 
-Settings are stored in `data/settings.json` inside the `publish` folder (gitignored, never committed). If you ever rebuild with `dotnet publish` again into the same `publish` folder, that's safe and won't touch your settings — just don't delete the folder first.
+Settings are stored under `%LOCALAPPDATA%\KobraLanMonitor\settings.json` — outside the project/publish folder entirely, so rebuilding with `dotnet publish` (even into the same `publish` folder) never touches them.
 
 ## Known limitations
 
