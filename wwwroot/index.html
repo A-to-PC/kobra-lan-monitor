@@ -47,7 +47,7 @@
   }
   .layout { display: grid; grid-template-columns: 420px 1fr 420px; gap: 16px; align-items: stretch; }
   .col-left, .col-mid, .col-right {
-    display: flex; flex-direction: column; height: calc(100vh - 180px); overflow: hidden;
+    display: flex; flex-direction: column; height: calc(100vh - 160px); overflow-y: auto;
   }
   .col-left .card, .col-right .card { flex-shrink: 0; }
   .col-left .card:last-child, .col-right .card:last-child { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
