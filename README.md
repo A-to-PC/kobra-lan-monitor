@@ -6,19 +6,17 @@ Live status, camera streaming, print control, ACE (multi-material) filament and 
 
 ## Features
 
-**Live-verified against a real printer:**
+**Every feature is now live-verified against a real printer — nothing left untested:**
 - Live status: state, progress, layer, ETA, nozzle/bed temps, fan, filament slots
 - Genuine continuous camera stream (MJPEG, low latency — no polling), with its own Start/Stop control — fully independent of Slicer Next
 - Pause / Resume / Emergency Stop
 - File browser (local storage + USB): list, folder navigation, delete, preview thumbnails, upload from your PC, and start a print from any file
 - ACE box: filament colours/types, active-slot indicator, drying on/off
-
-**Built from the documented protocol, the one section not yet fully tested:**
-- Controls card — light on/off + brightness, nozzle/bed temperature, fan speed, print-speed-mode adjustment mid-print
-
-If you try Controls and it doesn't work exactly as expected, please open an issue with what you saw — that's exactly the feedback needed before it gets promoted to confirmed.
+- Controls card — light on/off, nozzle/bed temperature, fan speed, print-speed-mode adjustment mid-print (each confirmed live: a commanded value shows up as the real target temp/speed on the printer itself, not just in the UI). Light brightness isn't included — confirmed via Slicer Next's own UI that this light hardware isn't dimmable, on/off is all it supports.
 
 If a date shows up blank next to a file, that's deliberate — the printer sometimes reports a bogus tiny counter instead of a real timestamp for files tied to a print task, and the UI hides it rather than show something wrong.
+
+**A standalone Windows installer is coming soon** — a self-contained one-click `.exe` (bundled ffmpeg, no .NET SDK required) so the manual setup steps below become optional. Watch this repo for the release.
 
 ## Why this exists
 
