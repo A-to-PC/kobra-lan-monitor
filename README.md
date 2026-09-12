@@ -55,12 +55,12 @@ This creates a `publish` subfolder — that's the actual app. You can ignore the
 
 ```
 cd publish
-dotnet KobraLanMonitor.dll --HttpPort=8090
+dotnet KobraLanMonitor.dll --HttpPort=8899
 ```
 
 Leave that window open (or run it via Task Scheduler / a Windows service if you want it to survive reboots — not covered here yet).
 
-**5. Open `http://localhost:8090`** (or `http://<your-pc-ip>:8090` from another device on the same network), and complete the one-time setup form: your printer's LAN IP address, and a username/password for the dashboard itself (this is separate from anything Anycubic-related — it's just to keep your own dashboard private on your network).
+**5. Open `http://localhost:8899`** (or `http://<your-pc-ip>:8899` from another device on the same network), and complete the one-time setup form: your printer's LAN IP address, and a username/password for the dashboard itself (this is separate from anything Anycubic-related — it's just to keep your own dashboard private on your network).
 
 Settings are stored in `data/settings.json` inside the `publish` folder (gitignored, never committed). If you ever rebuild with `dotnet publish` again into the same `publish` folder, that's safe and won't touch your settings — just don't delete the folder first.
 

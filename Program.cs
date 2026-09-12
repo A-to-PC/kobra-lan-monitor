@@ -6,7 +6,7 @@ using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var httpPort = builder.Configuration.GetValue<int?>("HttpPort") ?? 8080;
+var httpPort = builder.Configuration.GetValue<int?>("HttpPort") ?? 8899;
 builder.WebHost.UseUrls($"http://0.0.0.0:{httpPort}");
 
 var appSettings = AppSettings.Load();
