@@ -1,6 +1,6 @@
 #define AppName "Kobra LAN Monitor"
 #define ShortName "Kobra LAN Monitor"
-#define AppVersion "1.0"
+#define AppVersion "1.0.1"
 #define AppPublisher "A to PC"
 ; No dedicated atopc.com.au page for this one -- the GitHub repo is the only confirmed
 ; real URL, so that's what AppPublisherURL points at rather than guessing a domain.
@@ -40,7 +40,7 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
-VersionInfoVersion={#AppVersion}.0.0
+VersionInfoVersion={#AppVersion}.0
 VersionInfoCopyright=Copyright (C) 2026 A to PC. All rights reserved.
 VersionInfoCompany=A to PC
 ; Admin required (was PrivilegesRequired=lowest) -- needed for the automatic Windows

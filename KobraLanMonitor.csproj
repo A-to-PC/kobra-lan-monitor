@@ -4,6 +4,17 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The Web SDK's build time static web assets pipeline stamps every wwwroot file,
+         including index.html, with "Cache-Control: max-age=31536000, immutable", a
+         policy meant for fingerprinted/hashed asset URLs that never change under the same
+         name. index.html has no such hash in its URL and its content changes every release,
+         so a browser that ever loaded the dashboard once caches that exact page for a full
+         year and never re-requests it, even after reinstalling a newer build server side.
+         Confirmed live: two consecutive layout fixes were invisible in the browser because
+         of exactly this. Disabling the feature reverts to plain static file serving with
+         ASP.NET Core's normal, non-aggressive default caching, which is correct for a
+         single-user LAN dashboard with no CDN in front of it. -->
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
   </PropertyGroup>
 
   <ItemGroup>

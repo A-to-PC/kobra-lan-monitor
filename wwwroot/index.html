@@ -42,18 +42,23 @@
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 20px;
-    margin-bottom: 16px;
+    padding: 16px;
+    margin-bottom: 12px;
   }
   .layout { display: grid; grid-template-columns: 420px 1fr 420px; gap: 16px; align-items: stretch; }
-  .col-left, .col-mid, .col-right {
-    display: flex; flex-direction: column; height: calc(100vh - 160px); overflow-y: auto;
+  /* No column has a hardcoded height anywhere -- that's what silently clipped the drying
+     toggle before. Instead, grid's own align-items:stretch sizes every column to match
+     whichever one is naturally tallest (col-left's real content height), and each column's
+     LAST card gets flex:1 to absorb the extra stretched space, so the camera and Files
+     card grow to visually align their bottom edge with col-left instead of leaving a gap.
+     Since this is all driven by real content height, not a viewport guess, it can never
+     clip again -- if col-left ever grows taller, everything else just grows to match. */
+  .col-left, .col-mid, .col-right { display: flex; flex-direction: column; }
+  .col-left .card:last-child, .col-mid .card:last-child, .col-right .card:last-child {
+    flex: 1; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0;
   }
-  .col-left .card, .col-right .card { flex-shrink: 0; }
-  .col-left .card:last-child, .col-right .card:last-child { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-bottom: 0; }
-  .col-mid .card { flex: 1; display: flex; flex-direction: column; margin-bottom: 0; min-height: 0; }
   .col-mid .camera-frame { flex: 1; aspect-ratio: unset; min-height: 0; }
-  .status-row { display: flex; align-items: center; gap: 8px; height: 28px; margin-bottom: 14px; }
+  .status-row { display: flex; align-items: center; gap: 8px; height: 28px; margin-bottom: 10px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
   .dot.connected { background: var(--good); }
   .dot.error, .dot.disconnected { background: var(--bad); }
@@ -68,7 +73,7 @@
     font-size: 0.9rem;
   }
   .filename { font-size: 0.9rem; color: var(--muted); margin-top: 4px; word-break: break-all; }
-  .progress-wrap { margin: 20px 0; }
+  .progress-wrap { margin: 12px 0; }
   .progress-bar-bg {
     background: var(--border);
     border-radius: 999px;
@@ -82,14 +87,14 @@
     transition: width 0.5s ease;
   }
   .progress-label { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
-  .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 16px; }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px; }
   .stat { }
   .stat .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
   .stat .value { font-size: 1.2rem; font-weight: 600; }
   .error-box { color: var(--bad); font-size: 0.85rem; margin-top: 12px; }
 
   .card h2 { font-size: 1rem; margin: 0 0 14px; }
-  .card-header-row { display: flex; align-items: center; justify-content: space-between; height: 28px; margin-bottom: 14px; }
+  .card-header-row { display: flex; align-items: center; justify-content: space-between; height: 28px; margin-bottom: 10px; }
   .card-header-row h2 { margin: 0; }
   .reconnect-btn {
     background: transparent;
@@ -148,7 +153,7 @@
   .file-delete-btn { color: var(--bad); border: 1px solid var(--bad); }
   .file-delete-btn:hover { background: var(--bad); color: white; }
   .file-delete-btn:disabled { opacity: 0.5; cursor: default; }
-  .box-info { font-size: 0.8rem; color: var(--muted); margin-bottom: 14px; }
+  .box-info { font-size: 0.8rem; color: var(--muted); margin-bottom: 10px; }
   .spool-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
   .spool { text-align: center; }
   .spool-active-marker { height: 10px; margin-bottom: 2px; }
@@ -323,7 +328,7 @@
         </div>
         <div class="box-info" id="boxInfo"></div>
         <div class="spool-grid" id="spoolGrid"></div>
-        <div class="control-row" style="margin-top: 16px;">
+        <div class="control-row" style="margin-top: 12px;">
           <span class="control-label">Drying</span>
           <button class="toggle-btn" id="dryingToggleBtn" onclick="toggleDrying()">--</button>
           <span class="control-value" id="dryingStatusText"></span>
