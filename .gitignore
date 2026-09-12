@@ -2,4 +2,6 @@ bin/
 obj/
 data/
 publish-local/
+publish-installer/
+installer_output/
 ffmpeg.exe

@@ -8,7 +8,16 @@ public class AppSettings
     public string? AuthUsername { get; set; }
     public string? AuthPasswordHash { get; set; }
 
-    private static readonly string SettingsPath = Path.Combine(AppContext.BaseDirectory, "data", "settings.json");
+    // %LOCALAPPDATA%\KobraLanMonitor\settings.json -- deliberately NOT next to the exe.
+    // Once the installer requires admin (for the Windows Firewall rule) and installs into
+    // Program Files, a normal non-elevated process can't write there afterward. LocalAppData
+    // is always writable by the current user regardless of where the exe itself lives, which
+    // is the standard Windows convention for exactly this split (exe location vs per-user
+    // mutable data) -- this also happens to resolve the Inno Setup "per-user area used with
+    // admin privileges" warning at its root, rather than working around it in the installer.
+    private static readonly string SettingsPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "KobraLanMonitor", "settings.json");
 
     public static AppSettings Load()
     {

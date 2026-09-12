@@ -16,4 +16,18 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Local publish output folders live inside the project root but aren't app source.
+         Without this exclude, the Web SDK's default Content glob ("**", minus bin/obj) picks
+         up any stray publish-star folder here, including real dev data like a leftover
+         data/settings.json from a previous manual "dotnet publish -o publish-local", and
+         re-embeds it into the next publish output. Found live: publish-local/data/settings.json
+         (Jason's own printer host and password hash) was leaking into a fresh installer publish
+         before this was added. -->
+    <Content Remove="publish/**" />
+    <Content Remove="publish-local/**" />
+    <Content Remove="publish-installer/**" />
+    <Content Remove="publish-installer-sf/**" />
+  </ItemGroup>
+
 </Project>
