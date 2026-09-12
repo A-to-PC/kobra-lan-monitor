@@ -16,7 +16,11 @@ Live status, camera streaming, print control, ACE (multi-material) filament and 
 
 If a date shows up blank next to a file, that's deliberate — the printer sometimes reports a bogus tiny counter instead of a real timestamp for files tied to a print task, and the UI hides it rather than show something wrong.
 
-**A standalone Windows installer is coming soon** — a self-contained one-click `.exe` (bundled ffmpeg, no .NET SDK required) so the manual setup steps below become optional. Watch this repo for the release.
+## Installation (Windows)
+
+Grab the installer from the [latest release](https://github.com/A-to-PC/kobra-lan-monitor/releases/latest) — a self-contained one-click `.exe`, bundled ffmpeg included, no .NET SDK required. It adds a Windows Firewall exception automatically (needs one UAC prompt for that) and creates three Start Menu/Desktop shortcuts: **Start**, **Stop**, and **Open** (reopens the dashboard in your browser without restarting anything). First run walks you through the one-time setup form described in step 5 below.
+
+Prefer to build from source instead (or need it on another OS)? See **Setup** below.
 
 ## Why this exists
 
@@ -34,7 +38,7 @@ Credentials are never hardcoded. Every session performs its own live handshake a
   - Confirmed detected and streaming, but with a "doubled frame" artifact (part of the image is a stale previous frame): **Razer Kiyo** (defaults to 1080p). Reproduced identically in Anycubic's own Slicer Next, so it's the printer's own onboard video pipeline, not something this app or its client can fix.
   - Working theory (two data points, not proven): Anycubic's own official camera accessory is 720p, matching the HD-3000 that works cleanly — the printer's video pipeline may simply be tuned for that resolution and mishandle higher ones like the Kiyo's default 1080p. **A 720p USB webcam is the safer bet** until this gets more data points.
 
-## Setup
+## Setup (build from source)
 
 **1. Get the code onto a permanent location** — this isn't something to run from a Downloads or temp folder, since it'll keep running long-term and stores its settings next to itself.
 
