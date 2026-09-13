@@ -15,14 +15,15 @@ public static class CameraStreamHandler
 
     public static async Task StreamAsync(HttpContext ctx, AppSettings appSettings, IConfiguration config, MqttMonitorService mqtt, ILogger logger)
     {
-        if (string.IsNullOrEmpty(appSettings.PrinterHost))
+        var activeHost = appSettings.ActivePrinter?.Host;
+        if (string.IsNullOrEmpty(activeHost))
         {
             ctx.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             return;
         }
 
         var ffmpegPath = config["FfmpegPath"] ?? Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe");
-        var streamUrl = $"http://{appSettings.PrinterHost}:18088/flv";
+        var streamUrl = $"http://{activeHost}:18088/flv";
         var ct = ctx.RequestAborted;
 
         // The printer's :18088/flv endpoint serves no frames at all until told to start its video

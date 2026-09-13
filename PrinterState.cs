@@ -27,6 +27,20 @@ public class PrinterState
     public int? LoadedSlot { get; set; }
     public bool? DryingOn { get; set; }
     public int? DryingTargetTemp { get; set; }
+    public string? PrinterVersion { get; set; }
+    public string? AceProVersion { get; set; }
+
+    // The real OTA check-for-updates exchange (confirmed 13/09/2026 via Rinkhals' own working
+    // check_updates.py, github.com/jbatonnet/Rinkhals): gkapi auto-publishes reportVersion on
+    // every cloud connect, and the server's actual answer arrives asynchronously on a plain
+    // "ota" topic (no "/report" suffix) -- there is no synchronous query/response command to
+    // call, so this is populated passively whenever such a message is overheard, never by an
+    // active request. The real field shape of a genuine "update available" reply is unconfirmed
+    // (Rinkhals' own reference script doesn't interpret it either, just surfaces it raw), so this
+    // stays a raw JsonElement rather than typed fields until a real one is actually observed.
+    public JsonElement? LatestOtaData { get; set; }
+    public DateTimeOffset? LatestOtaAt { get; set; }
+
     public DateTimeOffset? LastUpdated { get; set; }
 
     [JsonIgnore]
@@ -38,6 +52,47 @@ public class PrinterState
     public Dictionary<string, JsonElement> Raw => RawByTopic;
 
     private readonly Lock _lock = new();
+
+    /// <summary>
+    /// Clears everything back to defaults when switching to a different saved printer -- without
+    /// this, the dashboard would keep showing the previous printer's status/temps/filename for the
+    /// brief window before the new connection's own reports start arriving.
+    /// </summary>
+    public void Reset()
+    {
+        lock (_lock)
+        {
+            ConnectionStatus = "connecting";
+            Error = null;
+            State = null;
+            Progress = null;
+            CurrLayer = null;
+            TotalLayers = null;
+            RemainTimeSeconds = null;
+            Filename = null;
+            NozzleTemp = null;
+            NozzleTargetTemp = null;
+            BedTemp = null;
+            BedTargetTemp = null;
+            FanSpeedPct = null;
+            LightOn = null;
+            LightBrightness = null;
+            LightType = null;
+            PrintSpeedMode = null;
+            FilamentSlots = null;
+            BoxTemp = null;
+            LoadedSlot = null;
+            DryingOn = null;
+            DryingTargetTemp = null;
+            PrinterVersion = null;
+            AceProVersion = null;
+            LatestOtaData = null;
+            LatestOtaAt = null;
+            LastUpdated = null;
+            FileUploadUrl = null;
+            RawByTopic.Clear();
+        }
+    }
 
     public void ApplyMessage(string reportType, JsonElement payload)
     {
@@ -61,6 +116,12 @@ public class PrinterState
                     {
                         FileUploadUrl = fu.GetString();
                     }
+
+                    // Current firmware version, top-level on the info report per the documented Kobra 3
+                    // MQTT command reference (rvanderp3/kobra-connect) -- not yet live-confirmed on this
+                    // printer specifically.
+                    if (data.TryGetProperty("version", out var pv) && pv.ValueKind == JsonValueKind.String)
+                        PrinterVersion = pv.GetString();
 
                     if (data.TryGetProperty("project", out var project) && project.ValueKind == JsonValueKind.Object)
                     {
@@ -116,6 +177,14 @@ public class PrinterState
                     }
                     break;
 
+                case "ota":
+                    // Passive-only: this fires whenever gkapi's own reportVersion publish, or (if
+                    // gkapi relays it locally) the real cloud server's reply, crosses this broker --
+                    // never in response to anything Kobra LAN Monitor itself sends.
+                    LatestOtaData = data.Clone();
+                    LatestOtaAt = DateTimeOffset.UtcNow;
+                    break;
+
                 case "multiColorBox":
                     if (data.TryGetProperty("multi_color_box", out var boxes) && boxes.ValueKind == JsonValueKind.Array
                         && boxes.GetArrayLength() > 0)
@@ -123,6 +192,21 @@ public class PrinterState
                         var box = boxes[0];
                         if (box.TryGetProperty("temp", out var boxTemp) && boxTemp.TryGetInt32(out var bt2))
                             BoxTemp = bt2;
+                        // Confirmed 13/09/2026 against a real multiColorBox/getInfo report: it carries
+                        // id/status/model_id/auto_feed/loaded_slot/feed_status/temp/humidity/drying_status/
+                        // slots and genuinely no version field at any level -- these three key names will
+                        // never match on this printer. Left in defensively rather than removed in case a
+                        // future firmware version adds one, but the real ACE Pro version can currently
+                        // only come from the check-for-updates OTA exchange itself (AceProVersion stays
+                        // null until that succeeds), not from passive status polling.
+                        foreach (var key in (string[])["mcu_version", "firmware_version", "version"])
+                        {
+                            if (box.TryGetProperty(key, out var av) && av.ValueKind == JsonValueKind.String)
+                            {
+                                AceProVersion = av.GetString();
+                                break;
+                            }
+                        }
                         if (box.TryGetProperty("loaded_slot", out var ls) && ls.TryGetInt32(out var loadedSlot))
                             LoadedSlot = loadedSlot;
                         if (box.TryGetProperty("drying_status", out var dryStatus) && dryStatus.ValueKind == JsonValueKind.Object)
@@ -167,7 +251,8 @@ public class PrinterState
                 ConnectionStatus, Error, State, Progress, CurrLayer, TotalLayers,
                 RemainTimeSeconds, Filename, NozzleTemp, NozzleTargetTemp, BedTemp, BedTargetTemp,
                 FanSpeedPct, LightOn, LightBrightness, LightType, PrintSpeedMode, FilamentSlots, BoxTemp, LoadedSlot,
-                DryingOn, DryingTargetTemp,
+                DryingOn, DryingTargetTemp, PrinterVersion, AceProVersion,
+                LatestOtaData, LatestOtaAt,
                 LastUpdated, RawByTopic.ToDictionary(kv => kv.Key, kv => kv.Value));
         }
     }
@@ -196,6 +281,10 @@ public record PrinterStateSnapshot(
     int? LoadedSlot,
     bool? DryingOn,
     int? DryingTargetTemp,
+    string? PrinterVersion,
+    string? AceProVersion,
+    JsonElement? LatestOtaData,
+    DateTimeOffset? LatestOtaAt,
     DateTimeOffset? LastUpdated,
     Dictionary<string, JsonElement> Raw);
 

@@ -16,6 +16,7 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
     // Set only while a live, connected MQTT session exists, so the web layer can send real
     // print-control commands (e.g. the emergency stop button) through the same connection.
     private volatile IMqttClient? _currentClient;
+    private volatile string? _queryTopicBase;
     private volatile string? _printCommandTopic;
     private volatile string? _fileCommandTopic;
     private volatile string? _webFileCommandTopic;
@@ -30,6 +31,18 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
     // arrives for too long, that's treated as a dead connection and forces a reconnect.
     private volatile int _lastMessageTicks = Environment.TickCount;
     private static readonly TimeSpan StaleConnectionTimeout = TimeSpan.FromSeconds(30);
+
+    // Set only while ExecuteAsync is inside a RunOnceAsync call, so a printer switch can cancel
+    // just that one connection attempt without tearing down the whole BackgroundService the way
+    // cancelling stoppingToken itself would.
+    private volatile CancellationTokenSource? _switchRequested;
+
+    /// <summary>
+    /// Cancels whatever connection is currently active (or connecting) so the monitor loop drops
+    /// it and immediately reconnects to whichever printer is now active in AppSettings, instead of
+    /// waiting for the current one to fail or for the normal 10s retry delay.
+    /// </summary>
+    public void NotifyPrinterSwitched() => _switchRequested?.Cancel();
 
     /// <summary>
     /// Sends a print-control command. Pause/resume are confirmed via live capture of Slicer Next's own
@@ -314,11 +327,56 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
         }
     }
 
+    /// <summary>
+    /// Sends a query on an arbitrary type/action pair and awaits the matching response by msgid, the
+    /// same pending-request plumbing <see cref="SendFileCommandAsync"/> uses. General-purpose --
+    /// backs the Advanced page's disable-steppers/position/feed-filament/unwind-filament/export-video
+    /// features, each a real command found as a literal string in gkapi's own binary (not guessed),
+    /// with per-feature confidence (wire-confirmed/live-verified/guess) tracked in the UI itself
+    /// rather than here. Reusable for any other real type/action pair found later.
+    /// </summary>
+    public async Task<JsonElement?> SendGenericQueryAsync(string type, string action, object? data, CancellationToken ct)
+    {
+        var client = _currentClient;
+        var topicBase = _queryTopicBase;
+        if (client is not { IsConnected: true } || topicBase == null) return null;
+
+        var msgid = Guid.NewGuid().ToString();
+        var payload = new { type, action, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), msgid, data };
+        var tcs = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pendingFileRequests[msgid] = tcs;
+
+        try
+        {
+            var message = new MqttApplicationMessageBuilder()
+                .WithTopic($"{topicBase}/{type}")
+                .WithPayload(JsonSerializer.Serialize(payload))
+                .Build();
+            await client.PublishAsync(message, ct);
+
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
+            try
+            {
+                return await tcs.Task.WaitAsync(timeoutCts.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                return null;
+            }
+        }
+        finally
+        {
+            _pendingFileRequests.TryRemove(msgid, out _);
+        }
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            if (string.IsNullOrEmpty(appSettings.PrinterHost))
+            var activeHost = appSettings.ActivePrinter?.Host;
+            if (string.IsNullOrEmpty(activeHost))
             {
                 try
                 {
@@ -331,13 +389,19 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
                 continue;
             }
 
+            var switchCts = new CancellationTokenSource();
+            _switchRequested = switchCts;
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, switchCts.Token);
+            var wasSwitch = false;
+
             try
             {
-                await RunOnceAsync(appSettings.PrinterHost, stoppingToken);
+                await RunOnceAsync(activeHost, linkedCts.Token);
             }
             catch (OperationCanceledException)
             {
-                break;
+                if (stoppingToken.IsCancellationRequested) break;
+                wasSwitch = switchCts.IsCancellationRequested;
             }
             catch (Exception ex)
             {
@@ -347,6 +411,8 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
             }
             finally
             {
+                _switchRequested = null;
+                switchCts.Dispose();
                 _currentClient = null;
                 _printCommandTopic = null;
                 _fileCommandTopic = null;
@@ -360,6 +426,11 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
                         pending.TrySetCanceled();
                 }
             }
+
+            if (stoppingToken.IsCancellationRequested) break;
+            // A printer switch means a different host is already waiting to be connected to --
+            // reconnect immediately instead of sitting through the normal 10s retry delay.
+            if (wasSwitch) continue;
 
             try
             {
@@ -462,6 +533,7 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
         }
 
         _currentClient = client;
+        _queryTopicBase = queryTopicBase;
         _printCommandTopic = $"{queryTopicBase}/print";
         _fileCommandTopic = $"{slicerTopicBase}/file";
         _webFileCommandTopic = $"{queryTopicBase}/file";

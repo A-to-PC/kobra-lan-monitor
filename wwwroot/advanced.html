@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Advanced - Kobra 3 Max Monitor</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<script>
+  // Applied before first paint (blocking, in <head>) to avoid a flash of the wrong theme.
+  // Same three-state model as the Kobra Time Lapse desktop app (Auto/Light/Dark), and the same
+  // localStorage key as the Home tab -- an explicit choice made on either tab applies to both.
+  (function () {
+    try {
+      var stored = localStorage.getItem('theme');
+      if (stored === 'light' || stored === 'dark') {
+        document.documentElement.setAttribute('data-theme', stored);
+      }
+    } catch (e) {}
+  })();
+</script>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --muted: #666666;
+    --border: #dddddd;
+    --accent: #2563eb;
+    --good: #16a34a;
+    --bad: #dc2626;
+    --warn: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16181d;
+      --card: #21242b;
+      --text: #f0f0f0;
+      --muted: #9aa0aa;
+      --border: #33363e;
+      --accent: #5b9bff;
+      --good: #4ade80;
+      --bad: #f87171;
+      --warn: #fbbf24;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16181d;
+    --card: #21242b;
+    --text: #f0f0f0;
+    --muted: #9aa0aa;
+    --border: #33363e;
+    --accent: #5b9bff;
+    --good: #4ade80;
+    --bad: #f87171;
+    --warn: #fbbf24;
+  }
+  .theme-toggle {
+    background: transparent; border: 1px solid var(--border); border-radius: 8px;
+    width: 34px; height: 34px; font-size: 1rem; cursor: pointer; color: var(--text);
+    display: flex; align-items: center; justify-content: center; padding: 0;
+  }
+  .theme-toggle:hover { background: var(--bg); }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 14px 24px 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .tab-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; margin: -14px -24px 14px; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--card); flex-shrink: 0; }
+  .tab-links { display: flex; gap: 4px; justify-content: center; }
+  .tab-links a { padding: 12px 16px; text-decoration: none; color: var(--muted); font-size: 0.9rem; font-weight: 600; border-bottom: 2px solid transparent; }
+  .tab-links a.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-links a:hover:not(.active) { color: var(--text); }
+  .tab-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+  .stop-btn {
+    flex-shrink: 0; background: var(--bad); color: white; border: none; border-radius: 8px;
+    padding: 8px 16px; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.02em; cursor: pointer;
+  }
+  .stop-btn:hover { filter: brightness(1.1); }
+  .stop-btn:disabled { opacity: 0.6; cursor: default; }
+  .stop-status { font-size: 0.72rem; margin-top: 2px; text-align: right; min-height: 1.1em; }
+  .stop-status.ok { color: var(--good); }
+  .stop-status.fail { color: var(--bad); }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; flex-shrink: 0; text-align: center; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 0.9rem; flex-shrink: 0; text-align: center; }
+
+  /* Fixed single-screen layout: the grid fills whatever vertical space is left after the header,
+     never the page itself scrolls -- only an individual card's own content area does, same
+     technique the Home tab already uses for its Files list. */
+  .grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; grid-auto-rows: 1fr;
+    gap: 10px; max-width: 1500px; width: 100%; margin: 0 auto; flex: 1; min-height: 0;
+  }
+  @media (max-width: 1100px) { .grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; overflow-y: auto; } body { overflow: auto; } }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  .card h2 { font-size: 0.88rem; margin: 0 0 6px; }
+
+  .feature { padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .feature:last-child { border-bottom: none; padding-bottom: 0; }
+  .feature-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .feature-name { font-weight: 600; font-size: 0.88rem; }
+  .feature-line { color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
+
+  .confidence { display: inline-block; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; padding: 2px 6px; border-radius: 4px; flex-shrink: 0; }
+  .confidence.wire-confirmed { background: rgba(180,83,9,0.15); color: var(--warn); }
+  .confidence.live-verified { background: rgba(22,163,74,0.15); color: var(--good); }
+  .confidence.guess { background: rgba(220,38,38,0.15); color: var(--bad); }
+
+  details.why { margin-top: 4px; }
+  details.why summary { font-size: 0.75rem; color: var(--accent); cursor: pointer; list-style: none; }
+  details.why summary::-webkit-details-marker { display: none; }
+  details.why summary::before { content: "Why? "; }
+  details.why[open] summary::before { content: "Hide "; }
+  details.why .why-body { color: var(--muted); font-size: 0.78rem; margin-top: 6px; line-height: 1.5; }
+
+  .feature-controls { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .control-label { font-size: 0.8rem; color: var(--muted); }
+  input[type=number], input[type=text] {
+    padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 0.85rem;
+  }
+  input[type=number] { width: 60px; }
+  input[type=text] { width: 150px; }
+  button.apply-btn {
+    background: var(--accent); border: none; color: white; font-weight: 600;
+    padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 0.82rem; white-space: nowrap;
+  }
+  button.apply-btn:hover { opacity: 0.9; }
+  button.apply-btn:disabled { opacity: 0.5; cursor: default; }
+  a.apply-btn { text-decoration: none; display: inline-block; }
+  .control-status { font-size: 0.76rem; color: var(--muted); margin-top: 6px; }
+  pre.raw {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px; font-size: 0.7rem; overflow: auto; max-height: 180px; margin-top: 6px;
+    white-space: pre-wrap; word-break: break-word; color: var(--muted);
+  }
+  .unavailable-list { list-style: none; margin: 0; padding: 0; }
+  .unavailable-list li { padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .unavailable-list li:last-child { border-bottom: none; padding-bottom: 0; }
+  .unavailable-list .feature-name { font-size: 0.85rem; }
+
+  /* Matches the Home tab's Files list exactly -- same row layout/classes, so browsed videos look
+     like the same kind of thing as browsed print files, not a separate raw-data feature. */
+  .file-list-status { color: var(--muted); font-size: 0.85rem; }
+  .file-list { max-height: 130px; overflow-y: auto; }
+  .file-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .file-row:last-child { border-bottom: none; }
+  .file-info { min-width: 0; }
+  .file-name { font-size: 0.85rem; word-break: break-all; }
+  .file-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+  .printer-select {
+    padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--text); font-size: 0.82rem; max-width: 160px;
+  }
+  .printer-manage-btn {
+    background: transparent; border: 1px solid var(--border); border-radius: 8px;
+    width: 34px; height: 34px; font-size: 0.95rem; cursor: pointer; color: var(--text);
+    display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0;
+  }
+  .printer-manage-btn:hover { background: var(--bg); }
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; padding: 40px; box-sizing: border-box;
+  }
+  .modal-backdrop[hidden] { display: none; }
+  .modal-close {
+    position: absolute; top: -14px; right: -14px;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    font-size: 1.2rem; line-height: 1; cursor: pointer;
+  }
+  .modal-close:hover { background: var(--bad); color: white; border-color: var(--bad); }
+  .printer-modal-content {
+    position: relative; background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; width: 380px; max-width: 90vw; text-align: left;
+  }
+  .printer-modal-content h2 { margin: 0 0 14px; font-size: 1.05rem; }
+  .printer-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .printer-row:last-child { border-bottom: none; }
+  .printer-row .printer-info { min-width: 0; }
+  .printer-row .printer-name { font-size: 0.9rem; font-weight: 600; word-break: break-word; }
+  .printer-row .printer-name .active-badge {
+    font-size: 0.65rem; font-weight: 700; color: var(--good); margin-left: 6px; text-transform: uppercase;
+  }
+  .printer-row .printer-host { font-size: 0.78rem; color: var(--muted); }
+  .printer-row .printer-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .printer-row .printer-actions button {
+    background: transparent; border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 9px; font-size: 0.75rem; cursor: pointer; color: var(--text);
+  }
+  .printer-row .printer-actions button:hover { background: var(--bg); }
+  .printer-row .printer-actions button.delete-btn { color: var(--bad); border-color: var(--bad); }
+  .printer-row .printer-actions button.delete-btn:hover { background: var(--bad); color: white; }
+  .printer-add-row { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+  .printer-add-row input {
+    padding: 7px 9px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+<nav class="tab-bar">
+  <div style="display:flex; align-items:center; gap:8px;">
+    <button class="theme-toggle" id="themeToggle" onclick="cycleTheme()" title="Theme: Auto"></button>
+    <select class="printer-select" id="printerSelect" onchange="switchPrinter(this.value)"></select>
+    <button class="printer-manage-btn" onclick="openPrinterModal()" title="Manage printers">&#9881;</button>
+  </div>
+  <div class="tab-links">
+    <a href="/">Home</a>
+    <a href="/advanced.html" class="active">Advanced</a>
+  </div>
+  <div class="tab-actions">
+    <button class="stop-btn" id="stopBtn" onclick="emergencyStop()">EMERGENCY STOP</button>
+    <div class="stop-status" id="stopStatus"></div>
+  </div>
+</nav>
+<h1>Advanced</h1>
+<p class="sub">Secondary/occasional-use features -- the Home tab stays pure monitoring.</p>
+
+<div class="grid">
+
+  <div class="card">
+    <h2>Firmware Updates</h2>
+    <div class="feature">
+      <div class="feature-head">
+        <span class="feature-name">K3M version check</span>
+        <span class="confidence live-verified">live-verified</span>
+      </div>
+      <div class="feature-line">Compares your printer's version against a public firmware list -- no cloud needed.</div>
+      <details class="why"><summary></summary><div class="why-body">
+        Current version comes from the printer's own LAN status report. Latest version comes from
+        <a href="https://github.com/jbatonnet/Rinkhals.Firmwares" target="_blank" rel="noopener">jbatonnet/Rinkhals.Firmwares</a>,
+        a real, checksummed, actively-maintained mirror (Rinkhals' own build tooling uses this exact
+        source). It's a community mirror, not Anycubic's own server -- Anycubic doesn't publish a
+        public direct-download page for this model at all. The files ultimately came from real
+        printers' own downloads, mirrored by the community.
+      </div></details>
+      <div class="feature-controls">
+        <button class="apply-btn" id="publicCheckBtn" onclick="checkPublicFirmware()">Check for Updates</button>
+      </div>
+      <div class="control-status" id="publicCheckStatus"></div>
+      <div id="publicCheckDetail" hidden style="margin-top:6px;">
+        <div class="feature-line" id="publicCheckChanges"></div>
+        <div class="feature-controls">
+          <a class="apply-btn" id="publicDownloadLink" href="#" target="_blank" rel="noopener" onclick="showUsbHowTo()">Download</a>
+        </div>
+      </div>
+      <div id="usbHowTo" hidden style="margin-top:8px; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; font-size:0.78rem; line-height:1.6;">
+        <strong>How to install via USB:</strong>
+        <ol style="margin:6px 0 0; padding-left:18px;">
+          <li>Format a USB drive as FAT32.</li>
+          <li>Create a folder at the drive's root named exactly <code>help_sos_</code>.</li>
+          <li>Put the file inside, renamed to exactly <code>update.swu</code>.</li>
+          <li>Insert into the powered-on printer -- it applies automatically.</li>
+        </ol>
+      </div>
+    </div>
+    <div class="feature">
+      <div class="feature-head">
+        <span class="feature-name">Cloud OTA status</span>
+      </div>
+      <div class="feature-line">Passive read of whatever the printer's own cloud connection last reported. Only source for ACE Pro's version, but needs cloud (off in LAN mode).</div>
+      <details class="why"><summary></summary><div class="why-body">
+        Not an active query -- there is no command to ask the printer "check now" (confirmed via
+        Rinkhals' own working reference implementation). If LAN mode is on (the normal way this
+        printer runs), the printer has no cloud connection at all and there's genuinely nothing new
+        to show -- that's expected, not a failure.
+      </div></details>
+      <div class="feature-controls">
+        <span class="control-label">K3M</span>
+        <span id="printerVersion">--</span>
+        <span id="aceProVersionRow" hidden>
+          <span class="control-label">ACE Pro</span>
+          <span id="aceProVersion">--</span>
+        </span>
+      </div>
+      <div class="feature-controls">
+        <button class="apply-btn" id="firmwareCheckBtn" onclick="checkForUpdates()">Re-read cloud status</button>
+      </div>
+      <div class="control-status" id="firmwareStatus"></div>
+      <div class="control-status" id="firmwareLastChecked" style="color: var(--muted);"></div>
+      <pre class="raw" id="firmwareRaw" hidden></pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Print Control &amp; Diagnostics</h2>
+    <div class="feature">
+      <div class="feature-head">
+        <span class="feature-name">Disable steppers</span>
+        <span class="confidence wire-confirmed">wire-confirmed</span>
+      </div>
+      <div class="feature-line">Releases all axis motors -- handy after a print or before moving the gantry by hand.</div>
+      <details class="why"><summary></summary><div class="why-body">Real command: <code>axis:turnOff</code>.</div></details>
+      <div class="feature-controls">
+        <button class="apply-btn" onclick="disableSteppers()">Disable</button>
+      </div>
+      <div class="control-status" id="stepperResult"></div>
+    </div>
+    <div class="feature">
+      <div class="feature-head">
+        <span class="feature-name">Toolhead position</span>
+        <span class="confidence wire-confirmed">wire-confirmed</span>
+      </div>
+      <div class="feature-line">Live X/Y/Z readout -- useful for fault or G-code diagnostics.</div>
+      <details class="why"><summary></summary><div class="why-body">Real command: <code>axis:query</code>.</div></details>
+      <div class="feature-controls">
+        <button class="apply-btn" onclick="queryPosition()">Query</button>
+      </div>
+      <div class="control-status" id="positionResult"></div>
+      <pre class="raw" id="positionRaw" hidden></pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Filament (ACE Pro)</h2>
+    <div class="feature">
+      <div class="feature-head">
+        <span class="feature-name">Feed filament</span>
+        <span class="confidence wire-confirmed">wire-confirmed</span>
+      </div>
+      <div class="feature-line">Loads filament from the given slot.</div>
+      <details class="why"><summary></summary><div class="why-body">
+        Real command: <code>multiColorBox:feedFilament</code> -- field names (<code>box_id</code>/<code>slot_index</code>)
+        confirmed from the firmware's own struct, but the overall payload shape is a best-effort
+        guess, not live-verified.
+      </div></details>
+      <div class="feature-controls">
+        <span class="control-label">Slot</span>
+        <input type="number" id="feedSlotIndex" value="0" min="0" max="3">
+        <button class="apply-btn" onclick="feedFilament()">Feed</button>
+      </div>
+      <div class="control-status" id="feedResult"></div>
+      <pre class="raw" id="feedRaw" hidden></pre>
+    </div>
+    <div class="feature">
+      <div class="feature-head">
+        <span class="feature-name">Unwind filament</span>
+        <span class="confidence guess">guess</span>
+      </div>
+      <div class="feature-line">Expected to fail -- exists to see how it fails.</div>
+      <details class="why"><summary></summary><div class="why-body">
+        Guessed command: <code>multiColorBox:unwindFilament</code> -- mirrors the confirmed
+        <code>feedFilament</code> name by symmetry only, no literal match found in the firmware. A
+        genuine separate <code>UnwindFilament</code> controller method does exist, but it's unconfirmed
+        whether it's reachable this way, or only via a still-undeciphered separate API on port 80.
+      </div></details>
+      <div class="feature-controls">
+        <span class="control-label">Slot</span>
+        <input type="number" id="unwindSlotIndex" value="0" min="0" max="3">
+        <button class="apply-btn" onclick="unwindFilament()">Unwind</button>
+      </div>
+      <div class="control-status" id="unwindResult"></div>
+      <pre class="raw" id="unwindRaw" hidden></pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Time-lapse Videos</h2>
+    <div class="feature">
+      <div class="feature-head">
+        <span class="feature-name">Browse videos</span>
+        <span class="confidence live-verified">live-verified</span>
+      </div>
+      <div class="feature-line">Lists time-lapse output stored on the printer. Exporting a video to your PC isn't possible over LAN -- see "Confirmed not possible" below.</div>
+      <details class="why"><summary></summary><div class="why-body">
+        Real command: <code>file:listVideo</code> -- same confirmed family as the main dashboard's
+        local/USB file browser. Confirmed working live 13/09/2026 (2 real files returned).
+      </div></details>
+      <div class="feature-controls">
+        <button class="apply-btn" onclick="listVideos()">Browse</button>
+      </div>
+      <div id="videoListStatus" class="file-list-status"></div>
+      <div class="file-list" id="videoList"></div>
+    </div>
+    <div class="feature">
+      <div class="feature-name" style="font-weight:400;color:var(--muted);font-size:0.8rem;">Start/stop time-lapse isn't a separate action -- it's chosen in Slicer Next when you send the print.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Confirmed not possible</h2>
+    <ul class="unavailable-list">
+      <li>
+        <div class="feature-name">Z-offset / auto-leveling</div>
+        <div class="feature-line">Internal-only dispatcher, no external MQTT gateway (checked, including port 80's separate API).</div>
+      </li>
+      <li>
+        <div class="feature-name">Exclude Object</div>
+        <div class="feature-line">A raw Klipper status field, not an MQTT command -- this app doesn't talk to the Klipper socket directly.</div>
+      </li>
+      <li>
+        <div class="feature-name">Rename files</div>
+        <div class="feature-line">No such command anywhere in the firmware's exposed API.</div>
+      </li>
+      <li>
+        <div class="feature-name">Export a time-lapse video to your PC</div>
+        <div class="feature-line">Confirmed both live (Print &rarr; Videos &rarr; select a video &rarr; Export, on the real touchscreen) and in the firmware's own code: the button calls a plain native file-copy function directly, in-process, from internal storage to a USB drive plugged into the printer -- no MQTT, no HTTP, no API of any kind involved. It doesn't need one: the touchscreen app runs natively on the printer's own Linux system with direct filesystem access to both its own storage and the USB mount, so copying between them needs no network layer at all. That's exactly why it silently does nothing without a USB drive present, and why no remote client -- this app included -- could ever trigger the same thing over the network: there's no command to send, because the real thing being called isn't a command, it's a local file copy.</div>
+      </li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>About the badges</h2>
+    <div class="feature">
+      <div class="feature-head"><span class="confidence wire-confirmed">wire-confirmed</span></div>
+      <div class="feature-line">Real command, found as a literal string in the firmware -- not guessed -- but not yet tried against real hardware. Treat the result as informative even if nothing visible happens.</div>
+    </div>
+    <div class="feature">
+      <div class="feature-head"><span class="confidence live-verified">live-verified</span></div>
+      <div class="feature-line">Confirmed working against real hardware.</div>
+    </div>
+    <div class="feature">
+      <div class="feature-head"><span class="confidence guess">guess</span></div>
+      <div class="feature-line">A best-effort naming guess with no literal match in the firmware at all -- expect it to fail. Exists to be tested and corrected.</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="modal-backdrop" id="printerModal" hidden onclick="closePrinterModal(event)">
+  <div class="printer-modal-content">
+    <button class="modal-close" onclick="closePrinterModal(event)">&times;</button>
+    <h2>Printers</h2>
+    <div id="printerList"></div>
+    <div class="printer-add-row">
+      <input type="text" id="printerFormName" placeholder="Name (e.g. Kobra 3 Max)">
+      <input type="text" id="printerFormHost" placeholder="IP address">
+      <button class="apply-btn" id="printerFormBtn" onclick="submitPrinterForm()">Add printer</button>
+    </div>
+    <div class="control-status" id="printerModalStatus"></div>
+  </div>
+</div>
+<script>
+// Three-state theme model matching the Kobra Time Lapse desktop app (Auto/Light/Dark) --
+// identical to the Home tab's copy of this, same localStorage key, so a choice made on either
+// tab applies to both immediately (this page's own head script also picks it up on next load).
+const THEME_ICONS = { auto: '\u{1F5A5}️', light: '☀️', dark: '\u{1F319}' };
+const THEME_LABELS = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+
+function currentTheme() {
+  try {
+    const stored = localStorage.getItem('theme');
+    return (stored === 'light' || stored === 'dark') ? stored : 'auto';
+  } catch (e) { return 'auto'; }
+}
+
+function renderThemeToggle() {
+  const theme = currentTheme();
+  const btn = document.getElementById('themeToggle');
+  if (!btn) return;
+  btn.textContent = THEME_ICONS[theme];
+  btn.title = `Theme: ${THEME_LABELS[theme]} (click to change)`;
+}
+
+function cycleTheme() {
+  const next = { auto: 'light', light: 'dark', dark: 'auto' }[currentTheme()];
+  try {
+    if (next === 'auto') localStorage.removeItem('theme');
+    else localStorage.setItem('theme', next);
+  } catch (e) {}
+  if (next === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', next);
+  renderThemeToggle();
+}
+
+renderThemeToggle();
+
+async function post(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return { ok: res.ok, status: res.status, data: await res.json().catch(() => null) };
+}
+
+// Identical to the Home tab's own emergencyStop() -- kept available here too since Emergency Stop
+// is safety-critical and should always be reachable regardless of which tab you're on.
+async function emergencyStop() {
+  if (!confirm('Stop the current print immediately? This cannot be undone.')) return;
+
+  const btn = document.getElementById('stopBtn');
+  const status = document.getElementById('stopStatus');
+  btn.disabled = true;
+  status.className = 'stop-status';
+  status.textContent = 'Sending stop command...';
+
+  try {
+    const res = await fetch('/api/print/stop', { method: 'POST' });
+    if (res.ok) {
+      status.className = 'stop-status ok';
+      status.textContent = 'Stop command sent.';
+    } else {
+      status.className = 'stop-status fail';
+      status.textContent = 'Failed: no live connection to printer.';
+    }
+  } catch (err) {
+    status.className = 'stop-status fail';
+    status.textContent = 'Failed: could not reach server.';
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { status.textContent = ''; status.className = 'stop-status'; }, 8000);
+  }
+}
+
+// Cloud-free: compares the printer's real current version (from /api/status, its own LAN report)
+// against the latest version in a real public firmware mirror. No cloud account or device pairing
+// involved anywhere in this path.
+async function checkPublicFirmware() {
+  const btn = document.getElementById('publicCheckBtn');
+  const statusEl = document.getElementById('publicCheckStatus');
+  const detailEl = document.getElementById('publicCheckDetail');
+  btn.disabled = true;
+  statusEl.textContent = 'Checking...';
+  statusEl.style.color = 'var(--muted)';
+  detailEl.hidden = true;
+  document.getElementById('usbHowTo').hidden = true;
+  try {
+    const [statusRes, latestRes] = await Promise.all([
+      fetch('/api/status', { cache: 'no-store' }),
+      fetch('/api/firmware/public-latest', { cache: 'no-store' }),
+    ]);
+    const status = await statusRes.json();
+    if (!latestRes.ok) {
+      statusEl.textContent = 'Could not reach the public firmware mirror.';
+      statusEl.style.color = 'var(--bad)';
+      return;
+    }
+    const latest = await latestRes.json();
+    const current = status.printerVersion;
+
+    if (!current) {
+      statusEl.textContent = `Latest available: v${latest.version}. Current version not yet known -- open the Home tab once to let it report in.`;
+      statusEl.style.color = 'var(--muted)';
+      return;
+    }
+
+    if (current === latest.version) {
+      statusEl.textContent = `Up to date -- v${current}.`;
+      statusEl.style.color = 'var(--good)';
+    } else {
+      statusEl.textContent = `Update available: v${latest.version} (yours: v${current}).`;
+      statusEl.style.color = 'var(--warn)';
+      document.getElementById('publicCheckChanges').textContent = latest.changes || '';
+      document.getElementById('publicDownloadLink').href = latest.url;
+      detailEl.hidden = false;
+    }
+  } catch (err) {
+    statusEl.textContent = 'Could not reach server.';
+    statusEl.style.color = 'var(--bad)';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function showUsbHowTo() {
+  document.getElementById('usbHowTo').hidden = false;
+}
+
+// Not an active query -- there is no command to ask the printer "check now" (confirmed via
+// Rinkhals' own working reference implementation). This just re-reads whatever the printer's own
+// cloud connection has already reported passively.
+async function checkForUpdates() {
+  const btn = document.getElementById('firmwareCheckBtn');
+  const statusEl = document.getElementById('firmwareStatus');
+  btn.disabled = true;
+  statusEl.textContent = 'Reading current status...';
+  document.getElementById('firmwareRaw').hidden = true;
+  try {
+    const res = await fetch('/api/firmware/check', { method: 'POST' });
+    const result = await res.json();
+    renderFirmwareResult(result, true);
+  } catch (err) {
+    statusEl.textContent = 'Could not reach server.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderFirmwareResult(result, isLiveResult) {
+  const statusEl = document.getElementById('firmwareStatus');
+  const rawEl = document.getElementById('firmwareRaw');
+  const lastCheckedEl = document.getElementById('firmwareLastChecked');
+  document.getElementById('printerVersion').textContent = result.printer?.currentVersion || '--';
+  const aceProRow = document.getElementById('aceProVersionRow');
+  if (result.acePro?.currentVersion) {
+    aceProRow.hidden = false;
+    document.getElementById('aceProVersion').textContent = result.acePro.currentVersion;
+  }
+
+  const prefix = isLiveResult ? '' : '(last known) ';
+  statusEl.textContent = result.latestOtaData
+    ? `${prefix}Update info last overheard from the printer's cloud connection at ${new Date(result.latestOtaAt).toLocaleString()} -- see raw output below.`
+    : `${prefix}Nothing overheard yet. This printer only reports update status while its own cloud connection is up, which LAN mode disables -- there is no way to force a check.`;
+
+  if (result.checkedAt) {
+    lastCheckedEl.textContent = `Last checked: ${new Date(result.checkedAt).toLocaleString()}`;
+  }
+
+  if (result.latestOtaData) {
+    rawEl.hidden = false;
+    rawEl.textContent = JSON.stringify(result, null, 2);
+  }
+}
+
+async function loadLastFirmwareCheck() {
+  try {
+    const res = await fetch('/api/firmware/last', { cache: 'no-store' });
+    const result = await res.json();
+    if (result.checkedAt) renderFirmwareResult(result, false);
+  } catch (err) {
+    // No cached result yet, or couldn't reach the server -- leave defaults.
+  }
+}
+
+async function disableSteppers() {
+  const el = document.getElementById('stepperResult');
+  el.textContent = 'Sending...';
+  const r = await post('/api/advanced/disable-steppers');
+  el.textContent = r.ok ? 'Sent -- check the printer.' : 'Failed: no live connection to printer.';
+}
+
+async function queryPosition() {
+  const el = document.getElementById('positionResult');
+  const rawEl = document.getElementById('positionRaw');
+  el.textContent = 'Querying...';
+  rawEl.hidden = true;
+  try {
+    const res = await fetch('/api/advanced/position');
+    const data = await res.json();
+    if (res.ok) {
+      el.textContent = 'Response received -- see raw output below.';
+      rawEl.hidden = false;
+      rawEl.textContent = JSON.stringify(data, null, 2);
+    } else {
+      el.textContent = 'No response -- no live connection to printer.';
+    }
+  } catch {
+    el.textContent = 'Could not reach server.';
+  }
+}
+
+async function feedFilament() {
+  const el = document.getElementById('feedResult');
+  const rawEl = document.getElementById('feedRaw');
+  const slotIndex = parseInt(document.getElementById('feedSlotIndex').value, 10) || 0;
+  el.textContent = 'Sending...';
+  rawEl.hidden = true;
+  const r = await post('/api/advanced/feed-filament', { slotIndex });
+  if (r.ok) {
+    el.textContent = 'Response received -- see raw output below. Watch the printer to confirm it actually fed.';
+    rawEl.hidden = false;
+    rawEl.textContent = JSON.stringify(r.data, null, 2);
+  } else {
+    el.textContent = 'No response -- no live connection to printer.';
+  }
+}
+
+async function unwindFilament() {
+  const el = document.getElementById('unwindResult');
+  const rawEl = document.getElementById('unwindRaw');
+  const slotIndex = parseInt(document.getElementById('unwindSlotIndex').value, 10) || 0;
+  el.textContent = 'Sending (this is a guess -- likely to fail)...';
+  rawEl.hidden = true;
+  const r = await post('/api/advanced/unwind-filament', { slotIndex });
+  if (r.ok) {
+    el.textContent = 'Got a response -- see raw output below. This means the guess may actually be right; watch the printer to confirm.';
+    rawEl.hidden = false;
+    rawEl.textContent = JSON.stringify(r.data, null, 2);
+  } else {
+    el.textContent = 'No response, as expected for an unconfirmed guess.';
+  }
+}
+
+function formatBytes(bytes) {
+  if (bytes == null) return null;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Renders exactly like the Home tab's Files list (same classes/layout) rather than a raw JSON
+// dump -- browsed videos should look like the same kind of thing as browsed print files.
+async function listVideos() {
+  const statusEl = document.getElementById('videoListStatus');
+  const listEl = document.getElementById('videoList');
+  statusEl.textContent = 'Loading...';
+  statusEl.hidden = false;
+  listEl.innerHTML = '';
+  try {
+    const res = await fetch('/api/files?target=video&path=/', { cache: 'no-store' });
+    if (!res.ok) {
+      statusEl.textContent = res.status === 503 ? 'No live connection to printer.' : 'Failed to load videos.';
+      return;
+    }
+    const files = await res.json();
+    if (!files.length) {
+      statusEl.textContent = 'No videos found.';
+      return;
+    }
+    statusEl.hidden = true;
+    for (const f of files) {
+      const row = document.createElement('div');
+      row.className = 'file-row';
+      const meta = [formatBytes(f.sizeBytes), f.modifiedAt ? new Date(f.modifiedAt).toLocaleString('en-AU') : null]
+        .filter(Boolean).join(' · ');
+      row.innerHTML = `
+        <div class="file-info">
+          <div class="file-name">${f.fileName}</div>
+          <div class="file-meta">${meta}</div>
+        </div>`;
+      listEl.appendChild(row);
+    }
+  } catch {
+    statusEl.textContent = 'Could not reach server.';
+  }
+}
+
+loadLastFirmwareCheck();
+
+// Multi-printer support (14/09/2026) -- identical to the Home tab's copy of this, same API,
+// so switching printers on either tab is reflected on both.
+let editingPrinterId = null;
+
+async function loadPrinters() {
+  try {
+    const res = await fetch('/api/printers', { cache: 'no-store' });
+    const printers = await res.json();
+    renderPrinterSelect(printers);
+    renderPrinterList(printers);
+  } catch (err) {
+    // Leave whatever was there before -- a transient fetch failure here shouldn't disrupt the page.
+  }
+}
+
+function renderPrinterSelect(printers) {
+  const select = document.getElementById('printerSelect');
+  select.innerHTML = printers.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  const activePrinter = printers.find(p => p.active);
+  if (activePrinter) select.value = activePrinter.id;
+}
+
+function renderPrinterList(printers) {
+  const listEl = document.getElementById('printerList');
+  listEl.innerHTML = printers.map(p => `
+    <div class="printer-row">
+      <div class="printer-info">
+        <div class="printer-name">${p.name}${p.active ? '<span class="active-badge">Active</span>' : ''}</div>
+        <div class="printer-host">${p.host}</div>
+      </div>
+      <div class="printer-actions">
+        ${p.active ? '' : `<button onclick="switchPrinter('${p.id}')">Activate</button>`}
+        <button onclick="startEditPrinter('${p.id}', '${p.name.replace(/'/g, "\\'")}', '${p.host}')">Edit</button>
+        <button class="delete-btn" onclick="deletePrinter('${p.id}')">Delete</button>
+      </div>
+    </div>`).join('') || '<div class="file-list-status">No printers yet.</div>';
+}
+
+function openPrinterModal() {
+  cancelEditPrinter();
+  loadPrinters();
+  document.getElementById('printerModal').hidden = false;
+}
+
+function closePrinterModal(e) {
+  if (e.target.id === 'printerModal' || e.target.className === 'modal-close') {
+    document.getElementById('printerModal').hidden = true;
+  }
+}
+
+function startEditPrinter(id, name, host) {
+  editingPrinterId = id;
+  document.getElementById('printerFormName').value = name;
+  document.getElementById('printerFormHost').value = host;
+  document.getElementById('printerFormBtn').textContent = 'Save changes';
+}
+
+function cancelEditPrinter() {
+  editingPrinterId = null;
+  document.getElementById('printerFormName').value = '';
+  document.getElementById('printerFormHost').value = '';
+  document.getElementById('printerFormBtn').textContent = 'Add printer';
+}
+
+async function submitPrinterForm() {
+  const name = document.getElementById('printerFormName').value.trim();
+  const host = document.getElementById('printerFormHost').value.trim();
+  const statusEl = document.getElementById('printerModalStatus');
+  if (!name || !host) { statusEl.textContent = 'Name and IP address are both required.'; return; }
+
+  const url = editingPrinterId ? `/api/printers/${editingPrinterId}` : '/api/printers';
+  const method = editingPrinterId ? 'PUT' : 'POST';
+  statusEl.textContent = editingPrinterId ? 'Saving...' : 'Adding...';
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, host }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      statusEl.textContent = body?.error || 'Failed.';
+      return;
+    }
+    statusEl.textContent = '';
+    cancelEditPrinter();
+    await loadPrinters();
+  } catch (err) {
+    statusEl.textContent = 'Could not reach server.';
+  }
+}
+
+async function deletePrinter(id) {
+  if (!confirm('Remove this printer? Its saved connection details will be gone for good.')) return;
+  try {
+    const res = await fetch(`/api/printers/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      alert(body?.error || 'Delete failed.');
+      return;
+    }
+    await loadPrinters();
+  } catch (err) {
+    alert('Could not reach server.');
+  }
+}
+
+async function switchPrinter(id) {
+  try {
+    await fetch(`/api/printers/${id}/activate`, { method: 'POST' });
+    await loadPrinters();
+  } catch (err) {
+    // Nothing further to do here -- the user will notice via the Home tab if this failed.
+  }
+}
+
+loadPrinters();
+</script>
+</body>
+</html>

@@ -5,6 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kobra 3 Max Monitor</title>
 <link rel="icon" type="image/png" href="favicon.png">
+<script>
+  // Applied before first paint (blocking, in <head>) to avoid a flash of the wrong theme.
+  // Same three-state model as the Kobra Time Lapse desktop app (Auto/Light/Dark): "auto" (or
+  // no stored value at all) follows the OS/browser preference live via the media query below;
+  // an explicit choice persists via localStorage, shared across both tabs (same origin).
+  (function () {
+    try {
+      var stored = localStorage.getItem('theme');
+      if (stored === 'light' || stored === 'dark') {
+        document.documentElement.setAttribute('data-theme', stored);
+      }
+    } catch (e) {}
+  })();
+</script>
 <style>
   :root {
     --bg: #f4f5f7;
@@ -17,7 +31,7 @@
     --bad: #dc2626;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #16181d;
       --card: #21242b;
       --text: #f0f0f0;
@@ -28,6 +42,22 @@
       --bad: #f87171;
     }
   }
+  :root[data-theme="dark"] {
+    --bg: #16181d;
+    --card: #21242b;
+    --text: #f0f0f0;
+    --muted: #9aa0aa;
+    --border: #33363e;
+    --accent: #5b9bff;
+    --good: #4ade80;
+    --bad: #f87171;
+  }
+  .theme-toggle {
+    background: transparent; border: 1px solid var(--border); border-radius: 8px;
+    width: 34px; height: 34px; font-size: 1rem; cursor: pointer; color: var(--text);
+    display: flex; align-items: center; justify-content: center; padding: 0;
+  }
+  .theme-toggle:hover { background: var(--bg); }
   * { box-sizing: border-box; }
   body {
     margin: 0;
@@ -36,6 +66,12 @@
     color: var(--text);
     padding: 24px;
   }
+  .tab-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; margin: -24px -24px 20px; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--card); }
+  .tab-links { display: flex; gap: 4px; justify-content: center; }
+  .tab-links a { padding: 12px 16px; text-decoration: none; color: var(--muted); font-size: 0.9rem; font-weight: 600; border-bottom: 2px solid transparent; }
+  .tab-links a.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-links a:hover:not(.active) { color: var(--text); }
+  .tab-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
   h1 { font-size: 1.4rem; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 20px; font-size: 0.9rem; }
   .card {
@@ -193,7 +229,7 @@
   .camera-frame img { width: 100%; height: 100%; object-fit: contain; }
   .camera-frame .placeholder { color: var(--muted); font-size: 0.85rem; }
 
-  .header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .header-row { text-align: center; }
   .stop-btn {
     flex-shrink: 0;
     background: var(--bad);
@@ -255,18 +291,67 @@
 
   .upload-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
   .upload-row input[type="file"] { flex: 1; font-size: 0.8rem; color: var(--muted); }
+
+  .printer-select {
+    padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--text); font-size: 0.82rem; max-width: 160px;
+  }
+  .printer-manage-btn {
+    background: transparent; border: 1px solid var(--border); border-radius: 8px;
+    width: 34px; height: 34px; font-size: 0.95rem; cursor: pointer; color: var(--text);
+    display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0;
+  }
+  .printer-manage-btn:hover { background: var(--bg); }
+  .printer-modal-content {
+    position: relative; background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; width: 380px; max-width: 90vw; text-align: left;
+  }
+  .printer-modal-content h2 { margin: 0 0 14px; font-size: 1.05rem; }
+  .printer-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .printer-row:last-child { border-bottom: none; }
+  .printer-row .printer-info { min-width: 0; }
+  .printer-row .printer-name { font-size: 0.9rem; font-weight: 600; word-break: break-word; }
+  .printer-row .printer-name .active-badge {
+    font-size: 0.65rem; font-weight: 700; color: var(--good); margin-left: 6px; text-transform: uppercase;
+  }
+  .printer-row .printer-host { font-size: 0.78rem; color: var(--muted); }
+  .printer-row .printer-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .printer-row .printer-actions button {
+    background: transparent; border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 9px; font-size: 0.75rem; cursor: pointer; color: var(--text);
+  }
+  .printer-row .printer-actions button:hover { background: var(--bg); }
+  .printer-row .printer-actions button.delete-btn { color: var(--bad); border-color: var(--bad); }
+  .printer-row .printer-actions button.delete-btn:hover { background: var(--bad); color: white; }
+  .printer-add-row { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+  .printer-add-row input {
+    padding: 7px 9px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 0.85rem;
+  }
 </style>
 </head>
 <body>
-  <div class="header-row">
-    <div>
-      <h1>Anycubic Kobra 3 Max</h1>
-      <p class="sub">Live status via local MQTT</p>
+  <nav class="tab-bar">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button class="theme-toggle" id="themeToggle" onclick="cycleTheme()" title="Theme: Auto"></button>
+      <select class="printer-select" id="printerSelect" onchange="switchPrinter(this.value)"></select>
+      <button class="printer-manage-btn" onclick="openPrinterModal()" title="Manage printers">&#9881;</button>
     </div>
-    <div>
+    <div class="tab-links">
+      <a href="/" class="active">Home</a>
+      <a href="/advanced.html">Advanced</a>
+    </div>
+    <div class="tab-actions">
       <button class="stop-btn" id="stopBtn" onclick="emergencyStop()">EMERGENCY STOP</button>
       <div class="stop-status" id="stopStatus"></div>
     </div>
+  </nav>
+  <div class="header-row">
+    <h1>Anycubic Kobra 3 Max</h1>
+    <p class="sub">Live status via local MQTT</p>
   </div>
 
   <div class="layout">
@@ -417,7 +502,56 @@
     </div>
   </div>
 
+  <div class="modal-backdrop" id="printerModal" hidden onclick="closePrinterModal(event)">
+    <div class="printer-modal-content">
+      <button class="modal-close" onclick="closePrinterModal(event)">&times;</button>
+      <h2>Printers</h2>
+      <div id="printerList"></div>
+      <div class="printer-add-row">
+        <input type="text" id="printerFormName" placeholder="Name (e.g. Kobra 3 Max)">
+        <input type="text" id="printerFormHost" placeholder="IP address">
+        <button class="apply-btn" id="printerFormBtn" onclick="submitPrinterForm()">Add printer</button>
+      </div>
+      <div class="control-status" id="printerModalStatus"></div>
+    </div>
+  </div>
+
+
   <script>
+    // Three-state theme model matching the Kobra Time Lapse desktop app (Auto/Light/Dark).
+    // "auto" means no explicit choice -- the head script's absence of data-theme lets the
+    // prefers-color-scheme media query drive it live, same as ThemeManager.cs's null override.
+    const THEME_ICONS = { auto: '\u{1F5A5}️', light: '☀️', dark: '\u{1F319}' };
+    const THEME_LABELS = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+
+    function currentTheme() {
+      try {
+        const stored = localStorage.getItem('theme');
+        return (stored === 'light' || stored === 'dark') ? stored : 'auto';
+      } catch (e) { return 'auto'; }
+    }
+
+    function renderThemeToggle() {
+      const theme = currentTheme();
+      const btn = document.getElementById('themeToggle');
+      if (!btn) return;
+      btn.textContent = THEME_ICONS[theme];
+      btn.title = `Theme: ${THEME_LABELS[theme]} (click to change)`;
+    }
+
+    function cycleTheme() {
+      const next = { auto: 'light', light: 'dark', dark: 'auto' }[currentTheme()];
+      try {
+        if (next === 'auto') localStorage.removeItem('theme');
+        else localStorage.setItem('theme', next);
+      } catch (e) {}
+      if (next === 'auto') document.documentElement.removeAttribute('data-theme');
+      else document.documentElement.setAttribute('data-theme', next);
+      renderThemeToggle();
+    }
+
+    renderThemeToggle();
+
     function formatDuration(seconds) {
       if (seconds == null) return '--';
       const h = Math.floor(seconds / 3600);
@@ -673,6 +807,129 @@
       }
     }
 
+    // Multi-printer support (14/09/2026): most people have one Anycubic printer, but some have
+    // several -- the dropdown switches which one is actively monitored (a real reconnect on the
+    // server side, not a client-side view filter), and the gear icon opens add/rename/delete.
+    let editingPrinterId = null;
+
+    async function loadPrinters() {
+      try {
+        const res = await fetch('/api/printers', { cache: 'no-store' });
+        const printers = await res.json();
+        renderPrinterSelect(printers);
+        renderPrinterList(printers);
+      } catch (err) {
+        // Leave whatever was there before -- a transient fetch failure here shouldn't disrupt the page.
+      }
+    }
+
+    function renderPrinterSelect(printers) {
+      const select = document.getElementById('printerSelect');
+      const active = select.value;
+      select.innerHTML = printers.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+      const activePrinter = printers.find(p => p.active);
+      if (activePrinter) select.value = activePrinter.id;
+    }
+
+    function renderPrinterList(printers) {
+      const listEl = document.getElementById('printerList');
+      listEl.innerHTML = printers.map(p => `
+        <div class="printer-row">
+          <div class="printer-info">
+            <div class="printer-name">${p.name}${p.active ? '<span class="active-badge">Active</span>' : ''}</div>
+            <div class="printer-host">${p.host}</div>
+          </div>
+          <div class="printer-actions">
+            ${p.active ? '' : `<button onclick="switchPrinter('${p.id}')">Activate</button>`}
+            <button onclick="startEditPrinter('${p.id}', '${p.name.replace(/'/g, "\\'")}', '${p.host}')">Edit</button>
+            <button class="delete-btn" onclick="deletePrinter('${p.id}')">Delete</button>
+          </div>
+        </div>`).join('') || '<div class="file-list-status">No printers yet.</div>';
+    }
+
+    function openPrinterModal() {
+      cancelEditPrinter();
+      loadPrinters();
+      document.getElementById('printerModal').hidden = false;
+    }
+
+    function closePrinterModal(e) {
+      if (e.target.id === 'printerModal' || e.target.className === 'modal-close') {
+        document.getElementById('printerModal').hidden = true;
+      }
+    }
+
+    function startEditPrinter(id, name, host) {
+      editingPrinterId = id;
+      document.getElementById('printerFormName').value = name;
+      document.getElementById('printerFormHost').value = host;
+      document.getElementById('printerFormBtn').textContent = 'Save changes';
+    }
+
+    function cancelEditPrinter() {
+      editingPrinterId = null;
+      document.getElementById('printerFormName').value = '';
+      document.getElementById('printerFormHost').value = '';
+      document.getElementById('printerFormBtn').textContent = 'Add printer';
+    }
+
+    async function submitPrinterForm() {
+      const name = document.getElementById('printerFormName').value.trim();
+      const host = document.getElementById('printerFormHost').value.trim();
+      const statusEl = document.getElementById('printerModalStatus');
+      if (!name || !host) { statusEl.textContent = 'Name and IP address are both required.'; return; }
+
+      const url = editingPrinterId ? `/api/printers/${editingPrinterId}` : '/api/printers';
+      const method = editingPrinterId ? 'PUT' : 'POST';
+      statusEl.textContent = editingPrinterId ? 'Saving...' : 'Adding...';
+
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, host }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          statusEl.textContent = body?.error || 'Failed.';
+          return;
+        }
+        statusEl.textContent = '';
+        cancelEditPrinter();
+        await loadPrinters();
+        poll();
+      } catch (err) {
+        statusEl.textContent = 'Could not reach server.';
+      }
+    }
+
+    async function deletePrinter(id) {
+      if (!confirm('Remove this printer? Its saved connection details will be gone for good.')) return;
+      try {
+        const res = await fetch(`/api/printers/${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          alert(body?.error || 'Delete failed.');
+          return;
+        }
+        await loadPrinters();
+        poll();
+      } catch (err) {
+        alert('Could not reach server.');
+      }
+    }
+
+    async function switchPrinter(id) {
+      try {
+        await fetch(`/api/printers/${id}/activate`, { method: 'POST' });
+        await loadPrinters();
+        poll();
+        loadFiles();
+      } catch (err) {
+        // poll()'s own error handling will surface a "cannot reach backend" state if this failed badly.
+      }
+    }
+
     async function uploadFile() {
       const input = document.getElementById('uploadInput');
       const statusEl = document.getElementById('uploadStatus');
@@ -838,6 +1095,7 @@
     setInterval(poll, 2000);
     startCameraStream();
     loadFiles();
+    loadPrinters();
   </script>
 </body>
 </html>
