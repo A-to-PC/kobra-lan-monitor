@@ -22,7 +22,12 @@ Live status, camera streaming, print control, ACE (multi-material) filament and 
 
 ## Advanced tab
 
-A second tab (next to Home) for secondary/occasional-use features the main dashboard deliberately stays clear of: firmware update checking, disabling steppers, querying toolhead position, ACE Pro filament feed/unwind, and browsing/exporting time-lapse videos. Every command on this page was found as a real, literal string inside the printer's own firmware, but not all of them have been confirmed against real hardware yet — each feature is labelled with its actual confidence level (wire-confirmed / live-verified / guess) rather than presenting everything as equally trustworthy.
+A second tab (next to Home) for secondary/occasional-use features the main dashboard deliberately stays clear of, split honestly into two sections rather than presenting everything as equally trustworthy:
+
+- **Confirmed Working** — firmware update checking, live toolhead position, and time-lapse video browsing. Live-verified against real hardware, not just found in the firmware.
+- **Unconfirmed — kept as breadcrumbs** — disabling steppers and ACE Pro filament feed/unwind. These are real commands (found as literal strings in the printer's own firmware, not guessed, aside from `unwindFilament` which is a best-effort guess) that send cleanly with no error, but real testing found no confirmed physical effect on the printer yet — the exact payload or precondition they need hasn't been found. Kept in the UI rather than deleted, since a real command name is still a real lead for whoever finds the rest.
+
+Every feature carries its actual confidence badge (live-verified / wire-confirmed / guess), explained in a legend at the top of the page.
 
 Firmware updates are two genuinely different checks, kept side by side:
 - **K3M version check** — live-verified, works with no cloud account at all. Compares your printer's own reported version against a public, checksummed firmware mirror ([jbatonnet/Rinkhals.Firmwares](https://github.com/jbatonnet/Rinkhals.Firmwares)) and links straight to the matching download plus a USB-install how-to.

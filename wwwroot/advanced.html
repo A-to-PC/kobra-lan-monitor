@@ -61,16 +61,18 @@
   }
   .theme-toggle:hover { background: var(--bg); }
   * { box-sizing: border-box; }
-  html, body { height: 100%; }
+  /* Plain, ordinary document flow -- no height:100%/overflow on html or body. Those were needed
+     for the old fixed-single-screen layout; forcing body to exactly viewport height while also
+     scrolling it internally is what kept eating the bottom padding (a real, repeatedly-confirmed
+     bug, not a caching issue) -- letting the actual page/viewport scroll normally, the standard
+     way virtually every web page does, sidesteps the whole class of "container padding isn't part
+     of its own scrollable area" quirks entirely. */
   body {
     margin: 0;
     font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     background: var(--bg);
     color: var(--text);
-    padding: 14px 24px 16px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    padding: 14px 24px 40px;
   }
   .tab-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; margin: -14px -24px 14px; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--card); flex-shrink: 0; }
   .tab-links { display: flex; gap: 4px; justify-content: center; }
@@ -90,23 +92,40 @@
   h1 { font-size: 1.4rem; margin: 0 0 4px; flex-shrink: 0; text-align: center; }
   .sub { color: var(--muted); margin: 0 0 20px; font-size: 0.9rem; flex-shrink: 0; text-align: center; }
 
-  /* Fixed single-screen layout: the grid fills whatever vertical space is left after the header,
-     never the page itself scrolls -- only an individual card's own content area does, same
-     technique the Home tab already uses for its Files list. */
+  /* Two confidence-tier sections (14/09/2026), each its own grid -- Confirmed Working first,
+     Unconfirmed (real commands kept as breadcrumbs, not deleted) below it. The page now scrolls
+     naturally since there's more content than one screen reliably fits; each card still caps its
+     own tall content (raw JSON, long lists) via its own overflow rather than growing forever. */
+  .section-header {
+    max-width: 1500px; width: 100%; margin: 18px auto 8px; padding: 0 2px;
+  }
+  .section-header:first-of-type { margin-top: 4px; }
+  .section-header h2 { font-size: 1rem; margin: 0; }
+  .section-header p { color: var(--muted); font-size: 0.8rem; margin: 3px 0 0; }
+
+  /* A compact legend, not a full feature card -- explains what the badges mean up front, before
+     any actually appear on the page, so the reader has the key before they need it. */
+  .badge-legend {
+    display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline;
+    max-width: 1500px; width: 100%; margin: 0 auto 16px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px;
+  }
+  .badge-legend-item { display: flex; align-items: baseline; gap: 8px; }
+  .badge-legend-item span.legend-text { color: var(--muted); font-size: 0.78rem; }
+
   .grid {
-    display: grid; grid-template-columns: 1fr 1fr 1fr; grid-auto-rows: 1fr;
-    gap: 10px; max-width: 1500px; width: 100%; margin: 0 auto; flex: 1; min-height: 0;
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px; max-width: 1500px; width: 100%; margin: 0 auto 20px;
   }
   @media (max-width: 1100px) { .grid { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; overflow-y: auto; } body { overflow: auto; } }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
 
   .card {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 12px 14px;
-    overflow-y: auto;
-    min-height: 0;
   }
   .card h2 { font-size: 0.88rem; margin: 0 0 6px; }
 
@@ -237,6 +256,25 @@
 <h1>Advanced</h1>
 <p class="sub">Secondary/occasional-use features -- the Home tab stays pure monitoring.</p>
 
+<div class="badge-legend">
+  <div class="badge-legend-item">
+    <span class="confidence live-verified">live-verified</span>
+    <span class="legend-text">Confirmed working against real hardware.</span>
+  </div>
+  <div class="badge-legend-item">
+    <span class="confidence wire-confirmed">wire-confirmed</span>
+    <span class="legend-text">Real command, a literal string in the firmware -- not guessed. May still be untested, or may send cleanly with no confirmed physical effect.</span>
+  </div>
+  <div class="badge-legend-item">
+    <span class="confidence guess">guess</span>
+    <span class="legend-text">A best-effort naming guess with no literal match in the firmware at all.</span>
+  </div>
+</div>
+
+<div class="section-header">
+  <h2>Confirmed Working</h2>
+  <p>Live-verified against real hardware -- these do exactly what they say.</p>
+</div>
 <div class="grid">
 
   <div class="card">
@@ -307,24 +345,7 @@
   </div>
 
   <div class="card">
-    <h2>Print Control &amp; Diagnostics</h2>
-    <div class="feature">
-      <div class="feature-head">
-        <span class="feature-name">Disable steppers</span>
-        <span class="confidence wire-confirmed">wire-confirmed</span>
-      </div>
-      <div class="feature-line">Releases all axis motors -- handy after a print or before moving the gantry by hand.</div>
-      <details class="why"><summary></summary><div class="why-body">
-        Real command: <code>axis:turnOff</code>. Update, 14/09/2026: live testing found the printer
-        never sends back a matched reply for this command (unlike file/video queries), so this button
-        now fires it and reports "Sent" immediately rather than waiting on a reply that never comes --
-        watch the gantry directly to confirm the motors actually released.
-      </div></details>
-      <div class="feature-controls">
-        <button class="apply-btn" onclick="disableSteppers()">Disable</button>
-      </div>
-      <div class="control-status" id="stepperResult"></div>
-    </div>
+    <h2>Diagnostics</h2>
     <div class="feature">
       <div class="feature-head">
         <span class="feature-name">Toolhead position</span>
@@ -342,52 +363,6 @@
       </div>
       <div class="control-status" id="positionResult"></div>
       <pre class="raw" id="positionRaw" hidden></pre>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Filament (ACE Pro)</h2>
-    <div class="feature">
-      <div class="feature-head">
-        <span class="feature-name">Feed filament</span>
-        <span class="confidence wire-confirmed">wire-confirmed</span>
-      </div>
-      <div class="feature-line">Loads filament from the given slot.</div>
-      <details class="why"><summary></summary><div class="why-body">
-        Real command: <code>multiColorBox:feedFilament</code> -- field names (<code>box_id</code>/<code>slot_index</code>)
-        confirmed from the firmware's own struct, but the overall payload shape is a best-effort
-        guess, not live-verified. Update, 14/09/2026: sends fine and the printer accepts it without
-        error, but a real test with <code>box_id</code> hardcoded to 0 fed nothing -- now uses the real
-        ACE Pro's own reported box id instead of guessing 0, but that alone hasn't been re-tested yet.
-      </div></details>
-      <div class="feature-controls">
-        <span class="control-label">Slot</span>
-        <input type="number" id="feedSlotIndex" value="0" min="0" max="3">
-        <button class="apply-btn" onclick="feedFilament()">Feed</button>
-      </div>
-      <div class="control-status" id="feedResult"></div>
-    </div>
-    <div class="feature">
-      <div class="feature-head">
-        <span class="feature-name">Unwind filament</span>
-        <span class="confidence guess">guess</span>
-      </div>
-      <div class="feature-line">A guessed command name -- sending successfully doesn't confirm it's right.</div>
-      <details class="why"><summary></summary><div class="why-body">
-        Guessed command: <code>multiColorBox:unwindFilament</code> -- mirrors the confirmed
-        <code>feedFilament</code> name by symmetry only, no literal match found in the firmware. A
-        genuine separate <code>UnwindFilament</code> controller method does exist, but it's unconfirmed
-        whether it's reachable this way, or only via a still-undeciphered separate API on port 80.
-        Update, 14/09/2026: this is now sent fire-and-forget like the other action commands, which
-        means a successful send no longer tells you anything about whether the guessed name is
-        correct -- the printer itself, watched directly, is the only real confirmation either way.
-      </div></details>
-      <div class="feature-controls">
-        <span class="control-label">Slot</span>
-        <input type="number" id="unwindSlotIndex" value="0" min="0" max="3">
-        <button class="apply-btn" onclick="unwindFilament()">Unwind</button>
-      </div>
-      <div class="control-status" id="unwindResult"></div>
     </div>
   </div>
 
@@ -414,6 +389,81 @@
     </div>
   </div>
 
+</div>
+
+<div class="section-header">
+  <h2>Unconfirmed -- Real Commands, Kept as Breadcrumbs</h2>
+  <p>Real strings found in the firmware (or in one case, a best-effort guess) -- they send cleanly with no error, but haven't been confirmed to actually do anything on real hardware. Kept here rather than deleted, since a real command name is still a real lead for whoever cracks the right payload/precondition next -- see the badge legend above for what each tier means.</p>
+</div>
+<div class="grid">
+
+  <div class="card">
+    <h2>Print Control</h2>
+    <div class="feature">
+      <div class="feature-head">
+        <span class="feature-name">Disable steppers</span>
+        <span class="confidence wire-confirmed">wire-confirmed</span>
+      </div>
+      <div class="feature-line">Releases all axis motors -- handy after a print or before moving the gantry by hand.</div>
+      <details class="why"><summary></summary><div class="why-body">
+        Real command: <code>axis:turnOff</code>. Update, 14/09/2026: sends cleanly and the printer
+        never rejects it, but a real physical check found no effect -- the gantry stayed tight after
+        sending. Either a required field is missing, or this command does something other than what
+        its name implies. Watch the gantry directly; don't trust "Sent" alone as confirmation.
+      </div></details>
+      <div class="feature-controls">
+        <button class="apply-btn" onclick="disableSteppers()">Disable</button>
+      </div>
+      <div class="control-status" id="stepperResult"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Filament (ACE Pro)</h2>
+    <div class="feature">
+      <div class="feature-head">
+        <span class="feature-name">Feed filament</span>
+        <span class="confidence wire-confirmed">wire-confirmed</span>
+      </div>
+      <div class="feature-line">Loads filament from the given slot.</div>
+      <details class="why"><summary></summary><div class="why-body">
+        Real command: <code>multiColorBox:feedFilament</code> -- field names (<code>box_id</code>/<code>slot_index</code>)
+        confirmed from the firmware's own struct, but the overall payload shape is a best-effort
+        guess, not live-verified. Update, 14/09/2026: sends fine and the printer accepts it without
+        error, but a real test -- first with <code>box_id</code> hardcoded to 0, then with the ACE
+        Pro's own real reported box id -- fed nothing physically either time. The command name is
+        real; the exact shape or precondition it needs still isn't.
+      </div></details>
+      <div class="feature-controls">
+        <span class="control-label">Slot</span>
+        <input type="number" id="feedSlotIndex" value="0" min="0" max="3">
+        <button class="apply-btn" onclick="feedFilament()">Feed</button>
+      </div>
+      <div class="control-status" id="feedResult"></div>
+    </div>
+    <div class="feature">
+      <div class="feature-head">
+        <span class="feature-name">Unwind filament</span>
+        <span class="confidence guess">guess</span>
+      </div>
+      <div class="feature-line">A guessed command name -- sending successfully doesn't confirm it's right.</div>
+      <details class="why"><summary></summary><div class="why-body">
+        Guessed command: <code>multiColorBox:unwindFilament</code> -- mirrors the confirmed
+        <code>feedFilament</code> name by symmetry only, no literal match found in the firmware. A
+        genuine separate <code>UnwindFilament</code> controller method does exist, but it's unconfirmed
+        whether it's reachable this way, or only via a still-undeciphered separate API on port 80.
+        Update, 14/09/2026: sends fine, fed nothing -- same result as the confirmed feedFilament name
+        above, which doesn't distinguish "wrong guess" from "right guess, wrong shape/precondition."
+      </div></details>
+      <div class="feature-controls">
+        <span class="control-label">Slot</span>
+        <input type="number" id="unwindSlotIndex" value="0" min="0" max="3">
+        <button class="apply-btn" onclick="unwindFilament()">Unwind</button>
+      </div>
+      <div class="control-status" id="unwindResult"></div>
+    </div>
+  </div>
+
   <div class="card">
     <h2>Confirmed not possible</h2>
     <ul class="unavailable-list">
@@ -436,21 +486,6 @@
     </ul>
   </div>
 
-  <div class="card">
-    <h2>About the badges</h2>
-    <div class="feature">
-      <div class="feature-head"><span class="confidence wire-confirmed">wire-confirmed</span></div>
-      <div class="feature-line">Real command, found as a literal string in the firmware -- not guessed -- but not yet tried against real hardware. Treat the result as informative even if nothing visible happens.</div>
-    </div>
-    <div class="feature">
-      <div class="feature-head"><span class="confidence live-verified">live-verified</span></div>
-      <div class="feature-line">Confirmed working against real hardware.</div>
-    </div>
-    <div class="feature">
-      <div class="feature-head"><span class="confidence guess">guess</span></div>
-      <div class="feature-line">A best-effort naming guess with no literal match in the firmware at all -- expect it to fail. Exists to be tested and corrected.</div>
-    </div>
-  </div>
 
 </div>
 
