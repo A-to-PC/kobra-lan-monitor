@@ -384,12 +384,16 @@ app.MapPost("/api/drying", async (DryingRequest req, MqttMonitorService mqtt, Ca
 // is for monitoring only), live on the separate advanced.html page instead. Each type/action pair
 // below was found as a real, literal string in gkapi's own binary (not guessed) unless its own
 // comment says otherwise -- see advanced.html for the per-feature confidence badge shown to the user.
+// Fire-and-forget (14/09/2026, see SendGenericCommandAsync's own comment): live testing showed
+// this genuinely disables the steppers on real hardware, but the printer never sends back a
+// msgid-matched reply the way file/video queries do, so waiting for one via SendGenericQueryAsync
+// always timed out and reported a false "no connection" failure despite a fully live session.
 app.MapPost("/api/advanced/disable-steppers", async (MqttMonitorService mqtt, CancellationToken ct) =>
 {
-    var response = await mqtt.SendGenericQueryAsync("axis", "turnOff", null, ct);
-    return response == null
-        ? Results.StatusCode(StatusCodes.Status503ServiceUnavailable)
-        : Results.Json(new { ok = true, raw = response });
+    var sent = await mqtt.SendGenericCommandAsync("axis", "turnOff", null, ct);
+    return sent
+        ? Results.Json(new { ok = true, sent = true })
+        : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 });
 
 app.MapGet("/api/advanced/position", async (MqttMonitorService mqtt, CancellationToken ct) =>
@@ -400,16 +404,20 @@ app.MapGet("/api/advanced/position", async (MqttMonitorService mqtt, Cancellatio
         : Results.Json(new { ok = true, raw = response });
 });
 
-app.MapPost("/api/advanced/feed-filament", async (FeedFilamentRequest req, MqttMonitorService mqtt, CancellationToken ct) =>
+// Fire-and-forget, same reasoning as disable-steppers above.
+app.MapPost("/api/advanced/feed-filament", async (FeedFilamentRequest req, MqttMonitorService mqtt, PrinterState state, CancellationToken ct) =>
 {
     // Field names (box_id, slot_index) confirmed real via gkapi's own struct tags; the overall
     // shape (flat under data, vs. nested like the confirmed multiColorBox:setDry command) is not
-    // confirmed -- this is the best-effort guess, not a live-verified shape.
-    var response = await mqtt.SendGenericQueryAsync("multiColorBox", "feedFilament",
-        new { box_id = req.BoxId ?? 0, slot_index = req.SlotIndex }, ct);
-    return response == null
-        ? Results.StatusCode(StatusCodes.Status503ServiceUnavailable)
-        : Results.Json(new { ok = true, raw = response });
+    // confirmed. Update, 14/09/2026: live testing with box_id hardcoded to 0 published fine but fed
+    // nothing physically -- now defaults to the real ACE Pro's own reported box id (state.BoxId,
+    // captured from live multiColorBox reports) instead of guessing 0, still overridable by the
+    // caller. Whether that alone makes it actually feed is unconfirmed.
+    var sent = await mqtt.SendGenericCommandAsync("multiColorBox", "feedFilament",
+        new { box_id = req.BoxId ?? state.BoxId ?? 0, slot_index = req.SlotIndex }, ct);
+    return sent
+        ? Results.Json(new { ok = true, sent = true })
+        : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 });
 
 // GUESS, not wire-confirmed (unlike feedFilament above): "unwindFilament" mirrors feedFilament's
@@ -419,13 +427,14 @@ app.MapPost("/api/advanced/feed-filament", async (FeedFilamentRequest req, MqttM
 // whether that's reachable this way at all, or only via the still-undeciphered port-80 API. Wired
 // in anyway at Jason's request as a clearly-labeled experiment -- advanced.html marks this "guess"
 // tier, distinct from feedFilament's "wire-confirmed" tier.
-app.MapPost("/api/advanced/unwind-filament", async (FeedFilamentRequest req, MqttMonitorService mqtt, CancellationToken ct) =>
+// Fire-and-forget, same reasoning as disable-steppers above.
+app.MapPost("/api/advanced/unwind-filament", async (FeedFilamentRequest req, MqttMonitorService mqtt, PrinterState state, CancellationToken ct) =>
 {
-    var response = await mqtt.SendGenericQueryAsync("multiColorBox", "unwindFilament",
-        new { box_id = req.BoxId ?? 0, slot_index = req.SlotIndex }, ct);
-    return response == null
-        ? Results.StatusCode(StatusCodes.Status503ServiceUnavailable)
-        : Results.Json(new { ok = true, raw = response });
+    var sent = await mqtt.SendGenericCommandAsync("multiColorBox", "unwindFilament",
+        new { box_id = req.BoxId ?? state.BoxId ?? 0, slot_index = req.SlotIndex }, ct);
+    return sent
+        ? Results.Json(new { ok = true, sent = true })
+        : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 });
 
 app.MapPost("/api/print/settings", async (PrintSettingsRequest req, MqttMonitorService mqtt, CancellationToken ct) =>

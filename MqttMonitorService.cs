@@ -25,6 +25,13 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
     private volatile string? _videoCommandTopic;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonElement>> _pendingFileRequests = new();
 
+    // Real-world capture (14/09/2026) showed the firmware answers an "axis" query with a genuine
+    // "axis/report" broadcast -- but unlike file/video queries, it doesn't echo the requester's own
+    // msgid back, so the strict msgid match in _pendingFileRequests never resolves it and the caller
+    // times out even though the printer genuinely responded. This is a fallback keyed by query type
+    // instead of msgid: the next report of that type resolves it, whichever request is waiting longest.
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonElement>> _pendingByType = new();
+
     // Tracks real traffic from the printer, independent of MQTTnet's own IsConnected flag -- a TCP
     // connection can go half-dead (printer stops responding, socket never notices) while IsConnected
     // stays true for hours, since without keepalive there's nothing actively probing it. If no message
@@ -345,6 +352,9 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
         var payload = new { type, action, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), msgid, data };
         var tcs = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pendingFileRequests[msgid] = tcs;
+        // Only registered as the type-fallback if nothing else is already waiting on this type --
+        // deliberately not a queue, so a flood of the same query type can't pile up stale waiters.
+        _pendingByType.TryAdd(type, tcs);
 
         try
         {
@@ -368,7 +378,47 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
         finally
         {
             _pendingFileRequests.TryRemove(msgid, out _);
+            // Only remove it if it's still ours -- a later SendGenericQueryAsync call for the same
+            // type may have already registered its own tcs in the meantime.
+            _pendingByType.TryRemove(new KeyValuePair<string, TaskCompletionSource<JsonElement>>(type, tcs));
         }
+    }
+
+    /// <summary>
+    /// Fires a type/action command without waiting for any reply. Real-world testing (14/09/2026)
+    /// showed steppers-off and ACE Pro feed/unwind commands genuinely execute against the printer --
+    /// browsing videos and the version check kept working through the same MQTT session -- but never
+    /// produce a msgid-matched response the way file/video queries reliably do, so waiting for one via
+    /// SendGenericQueryAsync always timed out and reported a false "no connection" failure. Same
+    /// fire-and-forget shape as SendLightControlAsync/SendPrintCommandAsync, which were never affected.
+    /// </summary>
+    public async Task<bool> SendGenericCommandAsync(string type, string action, object? data, CancellationToken ct)
+    {
+        var client = _currentClient;
+        var topicBase = _queryTopicBase;
+        if (client is not { IsConnected: true } || topicBase == null)
+        {
+            logger.LogWarning("Cannot send {Type}:{Action} -- no live MQTT connection", type, action);
+            return false;
+        }
+
+        var payload = new
+        {
+            type,
+            action,
+            timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            msgid = Guid.NewGuid().ToString(),
+            data,
+        };
+
+        var message = new MqttApplicationMessageBuilder()
+            .WithTopic($"{topicBase}/{type}")
+            .WithPayload(JsonSerializer.Serialize(payload))
+            .Build();
+
+        logger.LogInformation("Sending {Type}:{Action}", type, action);
+        await client.PublishAsync(message, ct);
+        return true;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -425,6 +475,7 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
                     if (_pendingFileRequests.TryRemove(key, out var pending))
                         pending.TrySetCanceled();
                 }
+                _pendingByType.Clear();
             }
 
             if (stoppingToken.IsCancellationRequested) break;
@@ -481,16 +532,25 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
                 // Some messages on this msgid are bare acks like {"msgid":"..."} with no "type" -- those
                 // aren't the real response, so don't consume the pending request for them; wait for the
                 // one that actually carries a "type" field.
+                var consumedByMsgid = false;
                 if (doc.RootElement.TryGetProperty("msgid", out var msgidEl) && msgidEl.ValueKind == JsonValueKind.String
                     && msgidEl.GetString() is { } msgid && doc.RootElement.TryGetProperty("type", out _)
                     && _pendingFileRequests.TryRemove(msgid, out var pending))
                 {
                     pending.TrySetResult(doc.RootElement.Clone());
+                    consumedByMsgid = true;
                 }
 
                 var reportType = doc.RootElement.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String
                     ? t.GetString()!
                     : topic.Split('/')[^1];
+
+                // Fallback for types (confirmed for "axis" 14/09/2026) whose reply never carries the
+                // requester's own msgid -- see _pendingByType's own comment for the full story.
+                if (!consumedByMsgid && _pendingByType.TryRemove(reportType, out var typePending))
+                {
+                    typePending.TrySetResult(doc.RootElement.Clone());
+                }
 
                 logger.LogInformation("MQTT <- {Topic} ({Type})", topic, reportType);
                 state.ApplyMessage(reportType, doc.RootElement);

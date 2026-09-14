@@ -24,6 +24,7 @@ public class PrinterState
     public int? PrintSpeedMode { get; set; }
     public List<FilamentSlot>? FilamentSlots { get; set; }
     public int? BoxTemp { get; set; }
+    public int? BoxId { get; set; }
     public int? LoadedSlot { get; set; }
     public bool? DryingOn { get; set; }
     public int? DryingTargetTemp { get; set; }
@@ -192,6 +193,12 @@ public class PrinterState
                         var box = boxes[0];
                         if (box.TryGetProperty("temp", out var boxTemp) && boxTemp.TryGetInt32(out var bt2))
                             BoxTemp = bt2;
+                        // The real feed/unwind box_id (14/09/2026): live testing showed feedFilament/
+                        // unwindFilament publish fine but do nothing physically when box_id defaults to
+                        // 0 -- this is the real ACE Pro's own reported id, captured so those commands can
+                        // use it instead of guessing 0 is correct.
+                        if (box.TryGetProperty("id", out var boxId) && boxId.TryGetInt32(out var bid))
+                            BoxId = bid;
                         // Confirmed 13/09/2026 against a real multiColorBox/getInfo report: it carries
                         // id/status/model_id/auto_feed/loaded_slot/feed_status/temp/humidity/drying_status/
                         // slots and genuinely no version field at any level -- these three key names will

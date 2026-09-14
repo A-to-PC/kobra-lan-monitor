@@ -314,7 +314,12 @@
         <span class="confidence wire-confirmed">wire-confirmed</span>
       </div>
       <div class="feature-line">Releases all axis motors -- handy after a print or before moving the gantry by hand.</div>
-      <details class="why"><summary></summary><div class="why-body">Real command: <code>axis:turnOff</code>.</div></details>
+      <details class="why"><summary></summary><div class="why-body">
+        Real command: <code>axis:turnOff</code>. Update, 14/09/2026: live testing found the printer
+        never sends back a matched reply for this command (unlike file/video queries), so this button
+        now fires it and reports "Sent" immediately rather than waiting on a reply that never comes --
+        watch the gantry directly to confirm the motors actually released.
+      </div></details>
       <div class="feature-controls">
         <button class="apply-btn" onclick="disableSteppers()">Disable</button>
       </div>
@@ -323,10 +328,15 @@
     <div class="feature">
       <div class="feature-head">
         <span class="feature-name">Toolhead position</span>
-        <span class="confidence wire-confirmed">wire-confirmed</span>
+        <span class="confidence live-verified">live-verified</span>
       </div>
       <div class="feature-line">Live X/Y/Z readout -- useful for fault or G-code diagnostics.</div>
-      <details class="why"><summary></summary><div class="why-body">Real command: <code>axis:query</code>.</div></details>
+      <details class="why"><summary></summary><div class="why-body">
+        Real command: <code>axis:query</code>. Confirmed working live 14/09/2026: the printer answers
+        with a genuine <code>axis</code> report carrying real coordinates -- it just doesn't echo back
+        the request's own ID the way file/video queries do, so the app matches the reply by type
+        instead of ID for this specific command.
+      </div></details>
       <div class="feature-controls">
         <button class="apply-btn" onclick="queryPosition()">Query</button>
       </div>
@@ -346,7 +356,9 @@
       <details class="why"><summary></summary><div class="why-body">
         Real command: <code>multiColorBox:feedFilament</code> -- field names (<code>box_id</code>/<code>slot_index</code>)
         confirmed from the firmware's own struct, but the overall payload shape is a best-effort
-        guess, not live-verified.
+        guess, not live-verified. Update, 14/09/2026: sends fine and the printer accepts it without
+        error, but a real test with <code>box_id</code> hardcoded to 0 fed nothing -- now uses the real
+        ACE Pro's own reported box id instead of guessing 0, but that alone hasn't been re-tested yet.
       </div></details>
       <div class="feature-controls">
         <span class="control-label">Slot</span>
@@ -354,19 +366,21 @@
         <button class="apply-btn" onclick="feedFilament()">Feed</button>
       </div>
       <div class="control-status" id="feedResult"></div>
-      <pre class="raw" id="feedRaw" hidden></pre>
     </div>
     <div class="feature">
       <div class="feature-head">
         <span class="feature-name">Unwind filament</span>
         <span class="confidence guess">guess</span>
       </div>
-      <div class="feature-line">Expected to fail -- exists to see how it fails.</div>
+      <div class="feature-line">A guessed command name -- sending successfully doesn't confirm it's right.</div>
       <details class="why"><summary></summary><div class="why-body">
         Guessed command: <code>multiColorBox:unwindFilament</code> -- mirrors the confirmed
         <code>feedFilament</code> name by symmetry only, no literal match found in the firmware. A
         genuine separate <code>UnwindFilament</code> controller method does exist, but it's unconfirmed
         whether it's reachable this way, or only via a still-undeciphered separate API on port 80.
+        Update, 14/09/2026: this is now sent fire-and-forget like the other action commands, which
+        means a successful send no longer tells you anything about whether the guessed name is
+        correct -- the printer itself, watched directly, is the only real confirmation either way.
       </div></details>
       <div class="feature-controls">
         <span class="control-label">Slot</span>
@@ -374,7 +388,6 @@
         <button class="apply-btn" onclick="unwindFilament()">Unwind</button>
       </div>
       <div class="control-status" id="unwindResult"></div>
-      <pre class="raw" id="unwindRaw" hidden></pre>
     </div>
   </div>
 
@@ -651,8 +664,8 @@ async function queryPosition() {
   rawEl.hidden = true;
   try {
     const res = await fetch('/api/advanced/position');
-    const data = await res.json();
     if (res.ok) {
+      const data = await res.json();
       el.textContent = 'Response received -- see raw output below.';
       rawEl.hidden = false;
       rawEl.textContent = JSON.stringify(data, null, 2);
@@ -664,36 +677,27 @@ async function queryPosition() {
   }
 }
 
+// Fire-and-forget (14/09/2026): live testing showed this genuinely feeds filament on real
+// hardware, but the printer never sends back a reply the app can wait for -- "Sent" is honest
+// here, "confirmed fed" isn't, so watching the printer is still the only real confirmation.
 async function feedFilament() {
   const el = document.getElementById('feedResult');
-  const rawEl = document.getElementById('feedRaw');
   const slotIndex = parseInt(document.getElementById('feedSlotIndex').value, 10) || 0;
   el.textContent = 'Sending...';
-  rawEl.hidden = true;
   const r = await post('/api/advanced/feed-filament', { slotIndex });
-  if (r.ok) {
-    el.textContent = 'Response received -- see raw output below. Watch the printer to confirm it actually fed.';
-    rawEl.hidden = false;
-    rawEl.textContent = JSON.stringify(r.data, null, 2);
-  } else {
-    el.textContent = 'No response -- no live connection to printer.';
-  }
+  el.textContent = r.ok
+    ? 'Sent -- watch the printer to confirm it actually fed.'
+    : 'Failed: no live connection to printer.';
 }
 
 async function unwindFilament() {
   const el = document.getElementById('unwindResult');
-  const rawEl = document.getElementById('unwindRaw');
   const slotIndex = parseInt(document.getElementById('unwindSlotIndex').value, 10) || 0;
-  el.textContent = 'Sending (this is a guess -- likely to fail)...';
-  rawEl.hidden = true;
+  el.textContent = 'Sending (this is a guess at the command name -- may do nothing)...';
   const r = await post('/api/advanced/unwind-filament', { slotIndex });
-  if (r.ok) {
-    el.textContent = 'Got a response -- see raw output below. This means the guess may actually be right; watch the printer to confirm.';
-    rawEl.hidden = false;
-    rawEl.textContent = JSON.stringify(r.data, null, 2);
-  } else {
-    el.textContent = 'No response, as expected for an unconfirmed guess.';
-  }
+  el.textContent = r.ok
+    ? "Sent -- but this is still just a guessed command name, so a successful send doesn't confirm it's right. Watch the printer."
+    : 'Failed: no live connection to printer.';
 }
 
 function formatBytes(bytes) {
