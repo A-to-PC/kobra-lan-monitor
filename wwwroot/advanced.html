@@ -278,13 +278,16 @@
     <div class="feature">
       <div class="feature-head">
         <span class="feature-name">Cloud OTA status</span>
+        <span class="confidence live-verified">live-verified</span>
       </div>
       <div class="feature-line">Passive read of whatever the printer's own cloud connection last reported. Only source for ACE Pro's version, but needs cloud (off in LAN mode).</div>
       <details class="why"><summary></summary><div class="why-body">
         Not an active query -- there is no command to ask the printer "check now" (confirmed via
         Rinkhals' own working reference implementation). If LAN mode is on (the normal way this
         printer runs), the printer has no cloud connection at all and there's genuinely nothing new
-        to show -- that's expected, not a failure.
+        to show -- that's expected, not a failure. Confirmed working live 14/09/2026: caught a real
+        passive OTA report during a brief window the printer was cloud-connected (real
+        device_unionid, machine_version, firmware_version all present).
       </div></details>
       <div class="feature-controls">
         <span class="control-label">K3M</span>
