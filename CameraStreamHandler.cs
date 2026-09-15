@@ -89,6 +89,25 @@ public static class CameraStreamHandler
             try { process.Kill(entireProcessTree: true); } catch { /* already exited */ }
         });
 
+        // stderr is redirected above but was never actually read here -- the exact same
+        // deadlock already found and fixed in Kobra Time Lapse's own ffmpeg handling
+        // (CaptureService.cs, 15/09/2026): ffmpeg writes continuous diagnostic/timing output
+        // to stderr while it runs, and if nothing drains that pipe, the OS buffer fills and
+        // ffmpeg itself blocks trying to write to it -- not a network or auth failure, a
+        // genuine deadlock. RTSP streams log far more transport/negotiation chatter than the
+        // onboard camera's plain HTTP pull, which is likely why this path hung specifically.
+        // Drained continuously and thrown away (nothing here currently parses it), just to
+        // keep the pipe from ever backing up.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var buf = new char[4096];
+                while (await process.StandardError.ReadAsync(buf, ct) > 0) { }
+            }
+            catch { /* process exited/killed -- expected */ }
+        }, ct);
+
         ctx.Response.ContentType = $"multipart/x-mixed-replace; boundary={Boundary}";
         ctx.Response.Headers.CacheControl = "no-cache";
 
