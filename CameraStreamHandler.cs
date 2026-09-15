@@ -50,19 +50,32 @@ public static class CameraStreamHandler
         var psi = new ProcessStartInfo
         {
             FileName = ffmpegPath,
-            ArgumentList =
-            {
-                "-i", streamUrl,
-                "-f", "mjpeg",
-                "-q:v", "5",
-                "-r", "10",
-                "pipe:1",
-            },
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
         };
+        if (useNetworkCamera)
+        {
+            // Without this, ffmpeg defaults to UDP transport for RTSP -- which a lot of
+            // consumer cameras (EZVIZ included) don't serve reliably, so the connection just
+            // sits open with no frames arriving rather than failing outright. VLC auto-negotiates
+            // around this silently; a bare ffmpeg -i rtsp://... call doesn't. Confirmed live
+            // 15/09/2026: the exact same URL connected fine in VLC while this hung on
+            // "Connecting..." indefinitely without this flag. Matches Kobra Time Lapse's own
+            // already-working RTSP capture, which has always used this flag.
+            psi.ArgumentList.Add("-rtsp_transport");
+            psi.ArgumentList.Add("tcp");
+        }
+        psi.ArgumentList.Add("-i");
+        psi.ArgumentList.Add(streamUrl);
+        psi.ArgumentList.Add("-f");
+        psi.ArgumentList.Add("mjpeg");
+        psi.ArgumentList.Add("-q:v");
+        psi.ArgumentList.Add("5");
+        psi.ArgumentList.Add("-r");
+        psi.ArgumentList.Add("10");
+        psi.ArgumentList.Add("pipe:1");
 
         using var process = Process.Start(psi);
         if (process == null)
