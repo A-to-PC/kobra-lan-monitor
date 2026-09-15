@@ -146,6 +146,20 @@
   .camera-btns { display: flex; gap: 8px; }
   .reconnect-btn.stop { color: var(--bad); border-color: var(--bad); }
   .reconnect-btn.stop:hover { background: var(--bad); color: white; }
+  .camera-source-switch { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
+  .camera-source-switch button {
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .camera-source-switch button + button { border-left: 1px solid var(--border); }
+  .camera-source-switch button.source-active { background: var(--accent); color: white; }
+
+  .camera-fields-details { margin-top: 12px; }
+  .camera-fields-details summary { font-size: 0.8rem; color: var(--muted); cursor: pointer; }
 
   .file-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
   .file-tab {
@@ -429,6 +443,10 @@
         <div class="card-header-row">
           <h2>Camera</h2>
           <div class="camera-btns">
+            <div class="camera-source-switch" id="cameraSourceSwitch" hidden>
+              <button id="camSourceOnboard" onclick="setCameraSource('onboard')">Onboard</button>
+              <button id="camSourceNetwork" onclick="setCameraSource('network')">Network</button>
+            </div>
             <button class="reconnect-btn" id="camStartBtn" onclick="startCameraStream()">Start</button>
             <button class="reconnect-btn stop" id="camStopBtn" onclick="stopCameraStream()" hidden>Stop</button>
           </div>
@@ -512,6 +530,17 @@
         <input type="text" id="printerFormHost" placeholder="IP address">
         <button class="apply-btn" id="printerFormBtn" onclick="submitPrinterForm()">Add printer</button>
       </div>
+      <details class="camera-fields-details">
+        <summary>Network camera (optional) — use a separate camera instead of the printer's own</summary>
+        <div class="printer-add-row">
+          <input type="text" id="printerFormCamHost" placeholder="Camera IP address">
+          <input type="text" id="printerFormCamUser" placeholder="Camera username (e.g. admin)">
+          <input type="password" id="printerFormCamPass" placeholder="Camera password">
+        </div>
+        <div class="printer-add-row">
+          <input type="text" id="printerFormCamPath" placeholder="RTSP path (default: /Streaming/Channels/101/)">
+        </div>
+      </details>
       <div class="control-status" id="printerModalStatus"></div>
     </div>
   </div>
@@ -663,6 +692,41 @@
       // A genuine live stream (multipart/x-mixed-replace) -- the browser keeps this single
       // connection open and repaints the <img> as each new frame arrives, no polling needed.
       img.src = `/api/stream.mjpg?t=${Date.now()}`;
+    }
+
+    // Only shown once a network camera is actually configured for the active printer -- a single
+    // onboard camera (the common case) stays exactly as it always has, no switcher clutter.
+    function renderCameraSourceSwitch(activePrinter) {
+      const switchEl = document.getElementById('cameraSourceSwitch');
+      if (!activePrinter || !activePrinter.hasNetworkCamera) {
+        switchEl.hidden = true;
+        return;
+      }
+      switchEl.hidden = false;
+      const onboardBtn = document.getElementById('camSourceOnboard');
+      const networkBtn = document.getElementById('camSourceNetwork');
+      const active = activePrinter.effectiveCameraSource;
+      onboardBtn.classList.toggle('source-active', active === 'onboard');
+      networkBtn.classList.toggle('source-active', active === 'network');
+    }
+
+    async function setCameraSource(source) {
+      try {
+        const res = await fetch('/api/camera/source', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source }),
+        });
+        if (!res.ok) return;
+        // A running stream is pinned to whichever source it started with -- restart it so the
+        // <img> actually reconnects against the newly-selected source instead of quietly staying
+        // on the old one until the next manual Stop/Start.
+        const wasRunning = !document.getElementById('camStopBtn').hidden;
+        if (wasRunning) { stopCameraStream(); startCameraStream(); }
+        await loadPrinters();
+      } catch (err) {
+        // Transient -- the switch buttons just won't visually update this time.
+      }
     }
 
     function stopCameraStream() {
@@ -818,6 +882,7 @@
         const printers = await res.json();
         renderPrinterSelect(printers);
         renderPrinterList(printers);
+        renderCameraSourceSwitch(printers.find(p => p.active));
       } catch (err) {
         // Leave whatever was there before -- a transient fetch failure here shouldn't disrupt the page.
       }
@@ -841,7 +906,7 @@
           </div>
           <div class="printer-actions">
             ${p.active ? '' : `<button onclick="switchPrinter('${p.id}')">Activate</button>`}
-            <button onclick="startEditPrinter('${p.id}', '${p.name.replace(/'/g, "\\'")}', '${p.host}')">Edit</button>
+            <button onclick="startEditPrinter('${p.id}', '${p.name.replace(/'/g, "\\'")}', '${p.host}', '${(p.networkCameraHost || '').replace(/'/g, "\\'")}', '${(p.networkCameraUsername || '').replace(/'/g, "\\'")}', '${(p.networkCameraPassword || '').replace(/'/g, "\\'")}', '${(p.networkCameraRtspPath || '').replace(/'/g, "\\'")}')">Edit</button>
             <button class="delete-btn" onclick="deletePrinter('${p.id}')">Delete</button>
           </div>
         </div>`).join('') || '<div class="file-list-status">No printers yet.</div>';
@@ -859,10 +924,14 @@
       }
     }
 
-    function startEditPrinter(id, name, host) {
+    function startEditPrinter(id, name, host, camHost, camUser, camPass, camPath) {
       editingPrinterId = id;
       document.getElementById('printerFormName').value = name;
       document.getElementById('printerFormHost').value = host;
+      document.getElementById('printerFormCamHost').value = camHost || '';
+      document.getElementById('printerFormCamUser').value = camUser || '';
+      document.getElementById('printerFormCamPass').value = camPass || '';
+      document.getElementById('printerFormCamPath').value = camPath || '';
       document.getElementById('printerFormBtn').textContent = 'Save changes';
     }
 
@@ -870,12 +939,20 @@
       editingPrinterId = null;
       document.getElementById('printerFormName').value = '';
       document.getElementById('printerFormHost').value = '';
+      document.getElementById('printerFormCamHost').value = '';
+      document.getElementById('printerFormCamUser').value = '';
+      document.getElementById('printerFormCamPass').value = '';
+      document.getElementById('printerFormCamPath').value = '';
       document.getElementById('printerFormBtn').textContent = 'Add printer';
     }
 
     async function submitPrinterForm() {
       const name = document.getElementById('printerFormName').value.trim();
       const host = document.getElementById('printerFormHost').value.trim();
+      const networkCameraHost = document.getElementById('printerFormCamHost').value.trim();
+      const networkCameraUsername = document.getElementById('printerFormCamUser').value.trim();
+      const networkCameraPassword = document.getElementById('printerFormCamPass').value;
+      const networkCameraRtspPath = document.getElementById('printerFormCamPath').value.trim();
       const statusEl = document.getElementById('printerModalStatus');
       if (!name || !host) { statusEl.textContent = 'Name and IP address are both required.'; return; }
 
@@ -887,7 +964,7 @@
         const res = await fetch(url, {
           method,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, host }),
+          body: JSON.stringify({ name, host, networkCameraHost, networkCameraUsername, networkCameraPassword, networkCameraRtspPath }),
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);

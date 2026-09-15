@@ -118,15 +118,30 @@ app.MapPost("/logout", async (HttpContext ctx) =>
 // have more (an ACE-equipped machine alongside an older one, or just more than one on the same
 // network). Only one printer is ever actively monitored at a time -- switching tears down the old
 // MQTT connection and brings up a new one, rather than juggling several live sessions at once.
+// NetworkCameraPassword is included here (not just on the active printer) so the edit form can
+// be pre-filled without a "blank the password by editing anything else" footgun -- this app is
+// self-hosted/local-only, same trust boundary as Kobra Time Lapse storing its own camera
+// password in plaintext settings.json, not a public multi-tenant service.
 app.MapGet("/api/printers", () => Results.Json(
-    appSettings.Printers.Select(p => new { p.Id, p.Name, p.Host, active = p.Id == appSettings.ActivePrinterId })));
+    appSettings.Printers.Select(p => new
+    {
+        p.Id, p.Name, p.Host, p.NetworkCameraHost, p.NetworkCameraUsername, p.NetworkCameraPassword, p.NetworkCameraRtspPath,
+        p.HasNetworkCamera, p.EffectiveCameraSource,
+        active = p.Id == appSettings.ActivePrinterId
+    })));
 
 app.MapPost("/api/printers", (AddPrinterRequest req) =>
 {
     if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Host))
         return Results.BadRequest(new { error = "name and host are required" });
 
-    var profile = new PrinterProfile(Guid.NewGuid().ToString("N"), req.Name.Trim(), req.Host.Trim());
+    var profile = new PrinterProfile(Guid.NewGuid().ToString("N"), req.Name.Trim(), req.Host.Trim())
+    {
+        NetworkCameraHost = string.IsNullOrWhiteSpace(req.NetworkCameraHost) ? null : req.NetworkCameraHost.Trim(),
+        NetworkCameraUsername = req.NetworkCameraUsername?.Trim(),
+        NetworkCameraPassword = req.NetworkCameraPassword,
+        NetworkCameraRtspPath = string.IsNullOrWhiteSpace(req.NetworkCameraRtspPath) ? "/Streaming/Channels/101/" : req.NetworkCameraRtspPath.Trim(),
+    };
     appSettings.Printers.Add(profile);
 
     // The very first printer ever added (e.g. via /setup) is activated automatically; later
@@ -146,9 +161,23 @@ app.MapPut("/api/printers/{id}", (string id, AddPrinterRequest req, PrinterState
     if (string.IsNullOrWhiteSpace(req.Name) || string.IsNullOrWhiteSpace(req.Host))
         return Results.BadRequest(new { error = "name and host are required" });
 
-    var wasActive = appSettings.Printers[index].Id == appSettings.ActivePrinterId;
-    var hostChanged = appSettings.Printers[index].Host != req.Host.Trim();
-    appSettings.Printers[index] = new PrinterProfile(id, req.Name.Trim(), req.Host.Trim());
+    var existing = appSettings.Printers[index];
+    var wasActive = existing.Id == appSettings.ActivePrinterId;
+    var hostChanged = existing.Host != req.Host.Trim();
+
+    // A camera-source override only makes sense while a network camera is actually configured --
+    // clearing the network camera (host now blank) drops any override too, back to onboard.
+    var newNetworkHost = string.IsNullOrWhiteSpace(req.NetworkCameraHost) ? null : req.NetworkCameraHost.Trim();
+    appSettings.Printers[index] = existing with
+    {
+        Name = req.Name.Trim(),
+        Host = req.Host.Trim(),
+        NetworkCameraHost = newNetworkHost,
+        NetworkCameraUsername = req.NetworkCameraUsername?.Trim(),
+        NetworkCameraPassword = req.NetworkCameraPassword,
+        NetworkCameraRtspPath = string.IsNullOrWhiteSpace(req.NetworkCameraRtspPath) ? "/Streaming/Channels/101/" : req.NetworkCameraRtspPath.Trim(),
+        CameraSourceOverride = newNetworkHost == null ? null : existing.CameraSourceOverride,
+    };
     appSettings.Save();
 
     if (wasActive && hostChanged)
@@ -157,6 +186,21 @@ app.MapPut("/api/printers/{id}", (string id, AddPrinterRequest req, PrinterState
         mqtt.NotifyPrinterSwitched();
     }
     return Results.Json(appSettings.Printers[index]);
+});
+
+app.MapPost("/api/camera/source", (CameraSourceRequest req) =>
+{
+    var printer = appSettings.ActivePrinter;
+    if (printer == null) return Results.NotFound(new { error = "No active printer." });
+    if (req.Source != "network" && req.Source != "onboard")
+        return Results.BadRequest(new { error = "source must be 'network' or 'onboard'" });
+    if (req.Source == "network" && !printer.HasNetworkCamera)
+        return Results.BadRequest(new { error = "No network camera configured for this printer." });
+
+    var index = appSettings.Printers.FindIndex(p => p.Id == printer.Id);
+    appSettings.Printers[index] = printer with { CameraSourceOverride = req.Source };
+    appSettings.Save();
+    return Results.Ok(new { ok = true, source = req.Source });
 });
 
 app.MapDelete("/api/printers/{id}", (string id, PrinterState state, MqttMonitorService mqtt) =>
@@ -520,7 +564,14 @@ static async Task SignInAsync(HttpContext ctx, string username)
     await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
 }
 
-record AddPrinterRequest(string Name, string Host);
+record AddPrinterRequest(
+    string Name,
+    string Host,
+    string? NetworkCameraHost = null,
+    string? NetworkCameraUsername = null,
+    string? NetworkCameraPassword = null,
+    string? NetworkCameraRtspPath = null);
+record CameraSourceRequest(string Source); // "network" or "onboard"
 record DeleteFileRequest(string Target, string? Path, string FileName);
 record StartPrintRequest(string FileName, string? Path);
 record LightRequest(bool On, int? Brightness, int? LightType);

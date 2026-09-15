@@ -15,22 +15,37 @@ public static class CameraStreamHandler
 
     public static async Task StreamAsync(HttpContext ctx, AppSettings appSettings, IConfiguration config, MqttMonitorService mqtt, ILogger logger)
     {
-        var activeHost = appSettings.ActivePrinter?.Host;
-        if (string.IsNullOrEmpty(activeHost))
+        var printer = appSettings.ActivePrinter;
+        if (printer == null || string.IsNullOrEmpty(printer.Host))
         {
             ctx.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
             return;
         }
 
         var ffmpegPath = config["FfmpegPath"] ?? Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe");
-        var streamUrl = $"http://{activeHost}:18088/flv";
         var ct = ctx.RequestAborted;
+        var useNetworkCamera = printer.EffectiveCameraSource == "network" && printer.HasNetworkCamera;
 
-        // The printer's :18088/flv endpoint serves no frames at all until told to start its video
-        // encoder -- captured live from Slicer Next's own camera Play button. Safe to send even if
-        // another viewer already has it running (idempotent on the printer's side).
-        await mqtt.SendVideoCaptureControlAsync(true, ct);
-        await Task.Delay(400, ct);
+        string streamUrl;
+        if (useNetworkCamera)
+        {
+            // A separate camera on its own network connection -- doesn't touch the printer's own
+            // onboard video pipeline at all, and isn't affected by (or competing for a slot on)
+            // whatever else has the printer's own camera panel open elsewhere. See the K3M Journey,
+            // Day 16, for why that independence turned out to matter in practice, not just in theory.
+            streamUrl = printer.BuildNetworkCameraRtspUrl();
+        }
+        else
+        {
+            streamUrl = $"http://{printer.Host}:18088/flv";
+
+            // The printer's :18088/flv endpoint serves no frames at all until told to start its
+            // video encoder -- captured live from Slicer Next's own camera Play button. Safe to
+            // send even if another viewer already has it running (idempotent on the printer's side).
+            // Not applicable to a network camera, which is always just streaming on its own.
+            await mqtt.SendVideoCaptureControlAsync(true, ct);
+            await Task.Delay(400, ct);
+        }
 
         var psi = new ProcessStartInfo
         {

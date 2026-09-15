@@ -3,7 +3,28 @@ using System.Text.Json.Serialization;
 
 namespace KobraLanMonitor;
 
-public record PrinterProfile(string Id, string Name, string Host);
+// NetworkCameraHost being set is what "a network camera is configured" means throughout the
+// app -- CameraSourceOverride is null until the user has actually picked a side; null means
+// "auto" (network if configured, else onboard), not "onboard specifically".
+public record PrinterProfile(
+    string Id,
+    string Name,
+    string Host,
+    string? NetworkCameraHost = null,
+    string? NetworkCameraUsername = null,
+    string? NetworkCameraPassword = null,
+    string NetworkCameraRtspPath = "/Streaming/Channels/101/",
+    string? CameraSourceOverride = null)
+{
+    [JsonIgnore]
+    public bool HasNetworkCamera => !string.IsNullOrWhiteSpace(NetworkCameraHost);
+
+    [JsonIgnore]
+    public string EffectiveCameraSource => CameraSourceOverride ?? (HasNetworkCamera ? "network" : "onboard");
+
+    public string BuildNetworkCameraRtspUrl() =>
+        $"rtsp://{NetworkCameraUsername}:{NetworkCameraPassword}@{NetworkCameraHost}:554{NetworkCameraRtspPath}";
+}
 
 public class AppSettings
 {
