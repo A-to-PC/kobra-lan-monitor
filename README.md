@@ -12,7 +12,7 @@ Live status, camera streaming, print control, ACE (multi-material) filament and 
 
 **Every feature is now live-verified against a real printer — nothing left untested:**
 - Live status: state, progress, layer, ETA, nozzle/bed temps, fan, filament slots
-- Genuine continuous camera stream (MJPEG, low latency — no polling), with its own Start/Stop control — fully independent of Slicer Next
+- Genuine continuous camera stream (MJPEG, low latency — no polling), with its own Start/Stop control — fully independent of Slicer Next. Optionally point it at a separate network (RTSP/IP) camera per printer instead of the printer's own onboard one — the onboard video pipeline has been observed dropping when more than one app has its camera panel open at once, so a dedicated camera sidesteps that entirely. Only shown once one's actually configured; otherwise the onboard camera works exactly as it always has.
 - Pause / Resume / Emergency Stop
 - File browser (local storage + USB): list, folder navigation, delete, preview thumbnails, upload from your PC, and start a print from any file
 - ACE box: filament colours/types, active-slot indicator, drying on/off
