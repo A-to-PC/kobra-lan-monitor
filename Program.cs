@@ -530,18 +530,22 @@ app.MapPost("/api/files/upload", async (HttpRequest req, MqttMonitorService mqtt
     var file = form.Files.GetFile("file");
     if (file == null || file.Length == 0) return Results.BadRequest(new { error = "no file provided" });
 
-    // Undocumented endpoint (only known from the printer's own "info" report, urls.fileUploadurl) --
-    // trying multipart/form-data first since that's the most common shape for a plain HTTP upload
-    // sink; not yet live-verified.
+    // Real multipart shape, confirmed 16/09/2026 by packet-capturing an actual Slicer Next
+    // upload: a plain text "filename" field alongside the file, and the file itself under field
+    // name "gcode" -- not "file", which was an unverified guess (the printer's own form parser
+    // likely never found the file content under that name at all).
     using var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
     using var content = new MultipartFormDataContent();
+    content.Add(new StringContent(file.FileName), "filename");
     await using var fileStream = file.OpenReadStream();
     using var streamContent = new StreamContent(fileStream);
-    content.Add(streamContent, "file", file.FileName);
+    content.Add(streamContent, "gcode", file.FileName);
 
     try
     {
-        using var response = await httpClient.PostAsync(state.FileUploadUrl, content, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Post, state.FileUploadUrl) { Content = content };
+        request.Headers.Add("X-File-Length", file.Length.ToString());
+        using var response = await httpClient.SendAsync(request, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
         logger.LogInformation("Upload response ({Status}): {Body}", response.StatusCode, body);
         return response.IsSuccessStatusCode

@@ -90,8 +90,8 @@ public class MqttMonitorService(PrinterState state, AppSettings appSettings, ICo
     /// <summary>
     /// Starts printing a file already sitting on the printer's own storage (list-then-print, not an
     /// upload). Topic/payload shape per the documented Kobra 3 MQTT command reference
-    /// (rvanderp3/kobra-connect docs/mqtt-commands.md) -- not yet live-verified against a real print the
-    /// way pause/resume/stop/file-list are, since starting one is destructive to test casually.
+    /// (rvanderp3/kobra-connect docs/mqtt-commands.md) -- confirmed live: Jason has fired off multiple
+    /// real prints from the Monitor UI using this exact command.
     /// </summary>
     public async Task<bool> SendPrintStartAsync(string fileName, string path, CancellationToken ct)
     {
