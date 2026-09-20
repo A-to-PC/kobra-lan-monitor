@@ -14,7 +14,13 @@ public record PrinterProfile(
     string? NetworkCameraUsername = null,
     string? NetworkCameraPassword = null,
     string NetworkCameraRtspPath = "/Streaming/Channels/101/",
-    string? CameraSourceOverride = null)
+    string? CameraSourceOverride = null,
+    // Degrees clockwise (0/90/180/270) applied server-side to every frame before it ever
+    // reaches the browser -- e.g. a camera physically mounted sideways (a repurposed EZVIZ
+    // unit, in Jason's case) that has no rotate option of its own, only flip, in its vendor
+    // app. Applies to whichever camera source is currently active, not source-specific --
+    // simplest thing that actually matches "remember it" without extra per-source state.
+    int CameraRotationDeg = 0)
 {
     [JsonIgnore]
     public bool HasNetworkCamera => !string.IsNullOrWhiteSpace(NetworkCameraHost);

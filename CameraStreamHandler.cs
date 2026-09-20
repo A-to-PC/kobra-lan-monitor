@@ -69,6 +69,28 @@ public static class CameraStreamHandler
         }
         psi.ArgumentList.Add("-i");
         psi.ArgumentList.Add(streamUrl);
+
+        // Rotation applied here, server-side, to the actual frames -- not a CSS transform on
+        // the client. Simpler on the browser side (no aspect-ratio/box-size juggling for a
+        // portrait-shaped result -- object-fit:contain already handles a real portrait frame
+        // correctly) and means the rotation is genuinely "baked in" the same way for every
+        // viewer, not a per-browser display quirk. ffmpeg's transpose values are individually
+        // 90 degrees, not degrees-as-a-number, hence the explicit map rather than passing
+        // rotationDeg straight through: 1=90 CW, 2=90 CCW, and 180 is just two 90s stacked
+        // (transpose has no native 180 mode of its own).
+        var transposeFilter = printer.CameraRotationDeg switch
+        {
+            90 => "transpose=1",
+            180 => "transpose=1,transpose=1",
+            270 => "transpose=2",
+            _ => null
+        };
+        if (transposeFilter != null)
+        {
+            psi.ArgumentList.Add("-vf");
+            psi.ArgumentList.Add(transposeFilter);
+        }
+
         psi.ArgumentList.Add("-f");
         psi.ArgumentList.Add("mjpeg");
         psi.ArgumentList.Add("-q:v");

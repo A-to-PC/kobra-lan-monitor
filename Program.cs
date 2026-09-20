@@ -126,7 +126,7 @@ app.MapGet("/api/printers", () => Results.Json(
     appSettings.Printers.Select(p => new
     {
         p.Id, p.Name, p.Host, p.NetworkCameraHost, p.NetworkCameraUsername, p.NetworkCameraPassword, p.NetworkCameraRtspPath,
-        p.HasNetworkCamera, p.EffectiveCameraSource,
+        p.HasNetworkCamera, p.EffectiveCameraSource, p.CameraRotationDeg,
         active = p.Id == appSettings.ActivePrinterId
     })));
 
@@ -201,6 +201,19 @@ app.MapPost("/api/camera/source", (CameraSourceRequest req) =>
     appSettings.Printers[index] = printer with { CameraSourceOverride = req.Source };
     appSettings.Save();
     return Results.Ok(new { ok = true, source = req.Source });
+});
+
+app.MapPost("/api/camera/rotation", (CameraRotationRequest req) =>
+{
+    var printer = appSettings.ActivePrinter;
+    if (printer == null) return Results.NotFound(new { error = "No active printer." });
+    if (req.RotationDeg != 0 && req.RotationDeg != 90 && req.RotationDeg != 180 && req.RotationDeg != 270)
+        return Results.BadRequest(new { error = "rotationDeg must be 0, 90, 180 or 270" });
+
+    var index = appSettings.Printers.FindIndex(p => p.Id == printer.Id);
+    appSettings.Printers[index] = printer with { CameraRotationDeg = req.RotationDeg };
+    appSettings.Save();
+    return Results.Ok(new { ok = true, rotationDeg = req.RotationDeg });
 });
 
 app.MapDelete("/api/printers/{id}", (string id, PrinterState state, MqttMonitorService mqtt) =>
@@ -576,6 +589,7 @@ record AddPrinterRequest(
     string? NetworkCameraPassword = null,
     string? NetworkCameraRtspPath = null);
 record CameraSourceRequest(string Source); // "network" or "onboard"
+record CameraRotationRequest(int RotationDeg); // 0, 90, 180 or 270 clockwise
 record DeleteFileRequest(string Target, string? Path, string FileName);
 record StartPrintRequest(string FileName, string? Path);
 record LightRequest(bool On, int? Brightness, int? LightType);
