@@ -680,8 +680,40 @@
     let cameraStopped = false;
     let currentCameraRotationDeg = 0; // synced from the active printer's saved value in renderCameraSourceSwitch
 
+    // Wheel-zoom on the live image itself -- purely a CSS transform inside the already-clipped
+    // .camera-frame box (overflow:hidden, fixed aspect-ratio), so the card never resizes. Zooms
+    // toward whatever point the cursor is over, so hovering a corner of the bed and scrolling
+    // gets you a closer look at exactly that spot rather than always zooming to dead centre.
+    let cameraZoomScale = 1;
+    const CAMERA_ZOOM_MIN = 1;
+    const CAMERA_ZOOM_MAX = 4;
+    const CAMERA_ZOOM_STEP = 0.15;
+
+    function resetCameraZoom() {
+      cameraZoomScale = 1;
+      const img = document.getElementById('cameraImg');
+      img.style.transform = '';
+      img.style.transformOrigin = '';
+    }
+
+    function handleCameraWheelZoom(event) {
+      const img = document.getElementById('cameraImg');
+      if (img.hidden) return; // nothing to zoom when there's no live frame
+      event.preventDefault();
+
+      const rect = event.currentTarget.getBoundingClientRect();
+      const originX = ((event.clientX - rect.left) / rect.width) * 100;
+      const originY = ((event.clientY - rect.top) / rect.height) * 100;
+      img.style.transformOrigin = `${originX}% ${originY}%`;
+
+      const direction = event.deltaY < 0 ? 1 : -1;
+      cameraZoomScale = Math.min(CAMERA_ZOOM_MAX, Math.max(CAMERA_ZOOM_MIN, cameraZoomScale + direction * CAMERA_ZOOM_STEP));
+      img.style.transform = cameraZoomScale === 1 ? '' : `scale(${cameraZoomScale.toFixed(2)})`;
+    }
+
     function startCameraStream() {
       cameraStopped = false;
+      resetCameraZoom();
       const img = document.getElementById('cameraImg');
       const placeholder = document.getElementById('cameraPlaceholder');
       document.getElementById('camStartBtn').hidden = true;
@@ -768,6 +800,7 @@
 
     function stopCameraStream() {
       cameraStopped = true;
+      resetCameraZoom();
       const img = document.getElementById('cameraImg');
       // Clearing src aborts the in-flight fetch, which the server sees via RequestAborted and
       // cleanly kills ffmpeg + closes the connection to the printer -- a proper teardown, not
@@ -1210,6 +1243,9 @@
     startCameraStream();
     loadFiles();
     loadPrinters();
+    // { passive: false } is required so preventDefault() inside the handler can actually stop
+    // the page itself from scrolling while the cursor is over the camera feed.
+    document.querySelector('.camera-frame').addEventListener('wheel', handleCameraWheelZoom, { passive: false });
   </script>
 </body>
 </html>
