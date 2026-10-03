@@ -12,6 +12,7 @@ public class PrinterState
     public int? CurrLayer { get; set; }
     public int? TotalLayers { get; set; }
     public int? RemainTimeSeconds { get; set; }
+    public int? ElapsedTimeSeconds { get; set; }
     public string? Filename { get; set; }
     public int? NozzleTemp { get; set; }
     public int? NozzleTargetTemp { get; set; }
@@ -70,6 +71,7 @@ public class PrinterState
             CurrLayer = null;
             TotalLayers = null;
             RemainTimeSeconds = null;
+            ElapsedTimeSeconds = null;
             Filename = null;
             NozzleTemp = null;
             NozzleTargetTemp = null;
@@ -139,6 +141,13 @@ public class PrinterState
                         // value of 134, which only lines up as minutes: ~192min total - 54min elapsed =~138).
                         if (project.TryGetProperty("remain_time", out var rt) && rt.TryGetInt32(out var remainMinutes))
                             RemainTimeSeconds = remainMinutes * 60;
+                        // print_time is the printer's own live elapsed-time counter, same minutes unit as
+                        // remain_time -- confirmed against a real capture (Sheep print: climbed 1/report
+                        // cycle from 0 up to 817 as progress went 0% to 100%, remain_time hitting 0 at the
+                        // same point). Used to compare real elapsed time against the slicer's own upfront
+                        // estimate -- see TODO.md.
+                        if (project.TryGetProperty("print_time", out var pt) && pt.TryGetInt32(out var elapsedMinutes))
+                            ElapsedTimeSeconds = elapsedMinutes * 60;
                         if (project.TryGetProperty("filename", out var fn) && fn.ValueKind == JsonValueKind.String)
                             Filename = fn.GetString();
                     }
@@ -256,7 +265,7 @@ public class PrinterState
         {
             return new PrinterStateSnapshot(
                 ConnectionStatus, Error, State, Progress, CurrLayer, TotalLayers,
-                RemainTimeSeconds, Filename, NozzleTemp, NozzleTargetTemp, BedTemp, BedTargetTemp,
+                RemainTimeSeconds, ElapsedTimeSeconds, Filename, NozzleTemp, NozzleTargetTemp, BedTemp, BedTargetTemp,
                 FanSpeedPct, LightOn, LightBrightness, LightType, PrintSpeedMode, FilamentSlots, BoxTemp, LoadedSlot,
                 DryingOn, DryingTargetTemp, PrinterVersion, AceProVersion,
                 LatestOtaData, LatestOtaAt,
@@ -273,6 +282,7 @@ public record PrinterStateSnapshot(
     int? CurrLayer,
     int? TotalLayers,
     int? RemainTimeSeconds,
+    int? ElapsedTimeSeconds,
     string? Filename,
     int? NozzleTemp,
     int? NozzleTargetTemp,

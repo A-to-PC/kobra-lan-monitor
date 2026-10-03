@@ -405,12 +405,12 @@
             <div class="value" id="remainTime">--</div>
           </div>
           <div class="stat">
-            <div class="label">Est. completion</div>
-            <div class="value" id="estCompletion">--</div>
+            <div class="label">Elapsed</div>
+            <div class="value" id="elapsedTime">--</div>
           </div>
           <div class="stat">
-            <div class="label">Last update</div>
-            <div class="value" id="lastUpdate">--</div>
+            <div class="label">Est. completion</div>
+            <div class="value" id="estCompletion">--</div>
           </div>
           <div class="stat">
             <div class="label">Nozzle</div>
@@ -427,6 +427,10 @@
           <div class="stat">
             <div class="label">Light</div>
             <div class="value" id="lightStatus">--</div>
+          </div>
+          <div class="stat">
+            <div class="label">Last update</div>
+            <div class="value" id="lastUpdate">--</div>
           </div>
         </div>
 
@@ -619,6 +623,7 @@
         document.getElementById('layerText').textContent =
           `Layer ${s.currLayer ?? '--'} / ${s.totalLayers ?? '--'}`;
 
+        document.getElementById('elapsedTime').textContent = formatDuration(s.elapsedTimeSeconds);
         document.getElementById('remainTime').textContent = formatDuration(s.remainTimeSeconds);
         document.getElementById('estCompletion').textContent =
           s.remainTimeSeconds != null

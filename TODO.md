@@ -7,3 +7,10 @@
   `code:10111`/"task ended abnormally" on a normal user-initiated stop, confirmed via a real
   capture) — just needs a button wired to it and a confirm-are-you-sure prompt, matching the
   existing style of other status-view controls.
+
+- ~~**Show elapsed print time, not just remaining/ETA.**~~ Done 03/10/2026. Turned out the
+  printer's own report already carries this — `print_time` sits right alongside `remain_time`
+  in the same `project` object, same minutes unit, confirmed against a real capture (Sheep
+  print: climbed 1 per report cycle from 0 up to 817 as progress went 0% → 100%, `remain_time`
+  hitting 0 at the exact same point). No timestamp-tracking needed, just read the field that
+  was already being sent. New "Elapsed" stat sits next to Remaining on the dashboard.
