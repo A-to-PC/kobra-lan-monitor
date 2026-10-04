@@ -6,7 +6,11 @@
   this is already known (`print/report` action moves through `"stopping"` → `"failed"` with
   `code:10111`/"task ended abnormally" on a normal user-initiated stop, confirmed via a real
   capture) — just needs a button wired to it and a confirm-are-you-sure prompt, matching the
-  existing style of other status-view controls.
+  existing style of other status-view controls. Not urgent — Emergency Stop already covers
+  the "I need this to stop right now" case, it's just a blunter tool: Emergency Stop locks
+  the printer (needs a reset/restart after), where a real Stop would cleanly return it to
+  idle, ready for the next print immediately. Worth building for the cleaner behaviour, not
+  because the current fallback is broken.
 
 - ~~**Show elapsed print time, not just remaining/ETA.**~~ Done 03/10/2026. Turned out the
   printer's own report already carries this — `print_time` sits right alongside `remain_time`

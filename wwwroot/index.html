@@ -603,6 +603,18 @@
       return `${m}m`;
     }
 
+    // Kobra Slicer's default filename format embeds the slice-time estimate right
+    // before .gcode (e.g. "..._PLA_0.2_3h13m.gcode.3mf") -- parsed here so Elapsed can
+    // show progress against the gcode's own estimate, not just raw elapsed time.
+    function parseEstimatedSecondsFromFilename(filename) {
+      if (!filename) return null;
+      const m = filename.match(/(?:(\d+)h)?(\d+)m\.gcode/i);
+      if (!m) return null;
+      const hours = m[1] ? parseInt(m[1], 10) : 0;
+      const mins = parseInt(m[2], 10);
+      return hours * 3600 + mins * 60;
+    }
+
     async function poll() {
       try {
         const res = await fetch('/api/status', { cache: 'no-store' });
@@ -623,7 +635,10 @@
         document.getElementById('layerText').textContent =
           `Layer ${s.currLayer ?? '--'} / ${s.totalLayers ?? '--'}`;
 
-        document.getElementById('elapsedTime').textContent = formatDuration(s.elapsedTimeSeconds);
+        const estSeconds = parseEstimatedSecondsFromFilename(s.filename);
+        document.getElementById('elapsedTime').textContent = estSeconds != null
+          ? `${formatDuration(s.elapsedTimeSeconds)} / ${formatDuration(estSeconds)}`
+          : formatDuration(s.elapsedTimeSeconds);
         document.getElementById('remainTime').textContent = formatDuration(s.remainTimeSeconds);
         document.getElementById('estCompletion').textContent =
           s.remainTimeSeconds != null
